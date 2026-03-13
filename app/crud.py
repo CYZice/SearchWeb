@@ -82,6 +82,9 @@ def search_inscriptions(db: Session, query: str, fields: List[str] = None, skip:
 def get_inscription(db: Session, inscription_id: int):
     return db.query(models.Inscription).filter(models.Inscription.id == inscription_id).first()
 
+def get_inscription_by_name(db: Session, name: str):
+    return db.query(models.Inscription).filter(models.Inscription.name == name).first()
+
 def create_inscription(db: Session, inscription_data: dict):
     # Ensure image_url is JSON string if it's a list
     if isinstance(inscription_data.get("image_url"), list):

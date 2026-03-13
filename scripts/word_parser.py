@@ -131,9 +131,14 @@ def save_char_image(image_part):
             
     return f"{CHAR_IMAGE_URL_PREFIX}{filename}"
 
-def parse_docx(file_path, db: Session):
+def parse_docx(file_path):
+    """
+    Parse a Word document and return a list of inscription dictionaries.
+    Does NOT save to database.
+    """
     doc = Document(file_path)
     
+    records = []
     current_record = None
     current_field = None
     image_counter = 1
@@ -142,10 +147,9 @@ def parse_docx(file_path, db: Session):
     record_pattern = re.compile(r'^[【\[](\d+)[】\]]')
     
     # Regex for field: Key: Value
-    # Handle Chinese colon and spaces
     field_pattern = re.compile(r'^([^\s：:]+)[\s]*[：:](.*)')
 
-    def save_current_record():
+    def finalize_record():
         nonlocal current_record
         if current_record:
             # Convert image_list to JSON string
@@ -153,10 +157,7 @@ def parse_docx(file_path, db: Session):
                 current_record["image_url"] = json.dumps(current_record["image_list"])
                 del current_record["image_list"]
             
-            # Create DB object
-            db_obj = Inscription(**current_record)
-            db.add(db_obj)
-            print(f"Saved record: {current_record.get('serial_num')} - {current_record.get('name')}")
+            records.append(current_record)
             current_record = None
 
     for para in doc.paragraphs:
@@ -166,10 +167,9 @@ def parse_docx(file_path, db: Session):
         # 1. Check for New Record Start
         match = record_pattern.match(raw_text)
         if match:
-            save_current_record()
+            finalize_record()
             
             serial_num_str = match.group(0) # e.g., 【017】
-            print(f"Found new record: {serial_num_str}")
             
             current_record = {
                 "serial_num": serial_num_str,
@@ -212,8 +212,6 @@ def parse_docx(file_path, db: Session):
         field_match = field_pattern.match(raw_text)
         if field_match:
             key_raw = field_match.group(1).strip()
-            # We don't use group(2) from regex because it misses images.
-            # We need to strip the key part from para_html_content.
             
             # Find mapped key
             db_key = None
@@ -224,26 +222,12 @@ def parse_docx(file_path, db: Session):
             
             if db_key:
                 # Extract value from html content
-                # Locate the separator (colon) in html content
-                # This is a bit heuristic: find the first colon after the key length
-                # Simpler: just replace the first occurrence of key+colon regex pattern in the string?
-                # But regex on HTML string is risky if tags are involved.
-                # Since key is at start, we can try to find the colon index.
-                
-                # Iterate to find the first colon that matches the pattern logic
                 match_obj = re.match(r'^([^\s：:]+[\s]*[：:])', para_html_content)
                 if match_obj:
-                    # Found prefix in HTML content
                     prefix = match_obj.group(1)
                     value = para_html_content[len(prefix):].strip()
                 else:
-                    # Fallback if regex fails on html content (maybe tags interrupted?)
-                    # Just use the raw text value if no images involved in value
                     value = field_match.group(2).strip()
-                    # If there were images, they might be lost or misplaced if we don't handle this carefully.
-                    # But if match_obj failed, it means the structure is weird.
-                    # Let's try to trust the regex on para_html_content first.
-                    pass
 
                 current_record[db_key] = value
                 current_field = db_key
@@ -257,8 +241,57 @@ def parse_docx(file_path, db: Session):
                 current_record[current_field] += "\n" + para_html_content
 
     # Save last record
-    save_current_record()
+    finalize_record()
+    
+    return records
+
+def process_import(file_path: str, db: Session):
+    """
+    Orchestrates the import process:
+    1. Parse docx
+    2. Check duplicates (by Name)
+    3. Save new records
+    4. Return report
+    """
+    try:
+        parsed_records = parse_docx(file_path)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"success": 0, "skipped": 0, "errors": [str(e)]}
+        
+    success_count = 0
+    skipped_list = []
+    
+    for record in parsed_records:
+        name = record.get("name")
+        if not name:
+            # Skip records without name
+            continue
+            
+        # Check duplicate
+        exists = db.query(Inscription).filter(Inscription.name == name).first()
+        if exists:
+            skipped_list.append({
+                "name": name,
+                "reason": "Duplicate Name",
+                "existing_id": exists.id,
+                "new_data": record  # Include full record data for potential overwrite
+            })
+            continue
+        
+        # Save new record
+        db_obj = Inscription(**record)
+        db.add(db_obj)
+        success_count += 1
+        
     db.commit()
+    
+    return {
+        "success": success_count,
+        "skipped": len(skipped_list),
+        "skipped_items": skipped_list
+    }
 
 def main():
     setup_database()
@@ -275,12 +308,8 @@ def main():
     for filename in files:
         path = os.path.join(RAW_DOCS_DIR, filename)
         print(f"Processing {filename}...")
-        try:
-            parse_docx(path, db)
-        except Exception as e:
-            print(f"Error processing {filename}: {e}")
-            import traceback
-            traceback.print_exc()
+        result = process_import(path, db)
+        print(f"Result for {filename}: {result}")
             
     db.close()
     print("Done.")

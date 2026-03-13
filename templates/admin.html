@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碑文资料管理后台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        [v-cloak] { display: none; }
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    {% raw %}
+    <div id="app" v-cloak class="flex min-h-screen">
+        
+        <!-- Sidebar -->
+        <div class="w-64 bg-gray-800 text-white flex-shrink-0">
+            <div class="p-6">
+                <h1 class="text-xl font-bold tracking-wider">资料管理系统</h1>
+            </div>
+            <nav class="mt-6">
+                <a @click="currentTab = 'import'" 
+                   :class="{'bg-gray-700 border-l-4 border-blue-500': currentTab === 'import', 'hover:bg-gray-700': currentTab !== 'import'}"
+                   class="block px-6 py-3 cursor-pointer transition-colors">
+                    资料导入
+                </a>
+                <a @click="currentTab = 'manage'" 
+                   :class="{'bg-gray-700 border-l-4 border-blue-500': currentTab === 'manage', 'hover:bg-gray-700': currentTab !== 'manage'}"
+                   class="block px-6 py-3 cursor-pointer transition-colors">
+                    数据维护
+                </a>
+                <a href="/" class="block px-6 py-3 hover:bg-gray-700 transition-colors mt-8 border-t border-gray-700">
+                    &larr; 返回检索首页
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-grow p-8 overflow-y-auto h-screen">
+            
+            <!-- IMPORT TAB -->
+            <div v-if="currentTab === 'import'" class="max-w-4xl mx-auto">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">批量资料导入</h2>
+                
+                <!-- Upload Area -->
+                <div class="bg-white p-8 rounded-lg shadow-md mb-8">
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-10 text-center hover:bg-gray-50 transition-colors relative">
+                        <input type="file" multiple @change="handleFileSelect" accept=".docx,.doc" 
+                               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <div v-if="selectedFiles.length === 0">
+                            <p class="text-gray-500 text-lg">点击或拖拽 Word 文档到此处</p>
+                            <p class="text-gray-400 text-sm mt-2">支持批量上传</p>
+                        </div>
+                        <div v-else>
+                            <p class="text-blue-600 font-medium text-lg">已选择 {{ selectedFiles.length }} 个文件</p>
+                            <ul class="mt-4 text-left max-h-40 overflow-y-auto text-sm text-gray-600 space-y-1">
+                                <li v-for="file in selectedFiles" :key="file.name">{{ file.name }}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 flex justify-end">
+                        <button @click="uploadFiles" :disabled="selectedFiles.length === 0 || uploading"
+                                class="bg-blue-600 text-white px-6 py-2 rounded shadow hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center">
+                            <span v-if="uploading" class="mr-2 animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+                            {{ uploading ? '正在导入...' : '开始导入' }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Import Report -->
+                <div v-if="importResult" class="bg-white rounded-lg shadow-md overflow-hidden animate-fade-in-up">
+                    <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-700">导入报告</h3>
+                        <span class="text-sm text-gray-500">{{ new Date().toLocaleString() }}</span>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+                            <div class="bg-green-50 p-4 rounded border border-green-200">
+                                <span class="block text-2xl font-bold text-green-600">{{ importResult.success }}</span>
+                                <span class="text-sm text-green-800">成功导入</span>
+                            </div>
+                            <div class="bg-yellow-50 p-4 rounded border border-yellow-200">
+                                <span class="block text-2xl font-bold text-yellow-600">{{ importResult.skipped }}</span>
+                                <span class="text-sm text-yellow-800">冲突跳过</span>
+                            </div>
+                            <div class="bg-red-50 p-4 rounded border border-red-200">
+                                <span class="block text-2xl font-bold text-red-600">{{ importResult.errors ? importResult.errors.length : 0 }}</span>
+                                <span class="text-sm text-red-800">错误</span>
+                            </div>
+                        </div>
+
+                        <!-- Conflict List -->
+                        <div v-if="importResult.skipped_items && importResult.skipped_items.length > 0">
+                            <h4 class="font-bold text-gray-800 mb-3 flex items-center">
+                                <span class="w-2 h-6 bg-yellow-500 mr-2 rounded"></span>
+                                冲突处理池
+                            </h4>
+                            <div class="border rounded-lg overflow-hidden">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">器名</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">来源文件</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">原因</th>
+                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <tr v-for="(item, index) in importResult.skipped_items" :key="index">
+                                            <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{{ item.name }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.source_file || '-' }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.reason }}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button @click="ignoreConflict(index)" class="text-gray-400 hover:text-gray-600 mr-4">忽略</button>
+                                                <button @click="overwriteConflict(item, index)" class="text-blue-600 hover:text-blue-900">覆盖 (Overwrite)</button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Errors List -->
+                        <div v-if="importResult.errors && importResult.errors.length > 0" class="mt-6">
+                            <h4 class="font-bold text-red-800 mb-2">错误详情</h4>
+                            <ul class="list-disc list-inside text-sm text-red-600 bg-red-50 p-4 rounded">
+                                <li v-for="(err, idx) in importResult.errors" :key="idx">{{ err }}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MANAGE TAB -->
+            <div v-if="currentTab === 'manage'" class="max-w-5xl mx-auto">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">数据维护</h2>
+                
+                <!-- Search -->
+                <div class="mb-6 flex gap-4">
+                    <input v-model="manageSearchQuery" @keyup.enter="performManageSearch" type="text" 
+                           class="flex-grow border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                           placeholder="搜索器名...">
+                    <button @click="performManageSearch" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
+                        搜索
+                    </button>
+                </div>
+
+                <!-- List -->
+                <div class="bg-white shadow rounded-lg overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">编号</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">器名</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">时代</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">释文预览</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="item in manageResults" :key="item.id">
+                                <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.id }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.serial_num }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{{ item.name }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.era || '-' }}</td>
+                                <td class="px-6 py-4 text-gray-500 text-sm max-w-xs truncate" :title="stripHtml(item.transcript)">
+                                    {{ stripHtml(item.transcript) }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button @click="deleteItem(item)" class="text-red-600 hover:text-red-900">删除</button>
+                                </td>
+                            </tr>
+                            <tr v-if="manageResults.length === 0">
+                                <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                                    暂无数据，请搜索或导入
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    {% endraw %}
+
+    <script>
+        const { createApp, ref, onMounted } = Vue
+
+        createApp({
+            setup() {
+                const currentTab = ref('import')
+                const selectedFiles = ref([])
+                const uploading = ref(false)
+                const importResult = ref(null)
+                
+                // Manage Tab State
+                const manageSearchQuery = ref('')
+                const manageResults = ref([])
+
+                const handleFileSelect = (event) => {
+                    selectedFiles.value = Array.from(event.target.files)
+                    importResult.value = null
+                }
+
+                const uploadFiles = async () => {
+                    if (selectedFiles.value.length === 0) return
+                    
+                    uploading.value = true
+                    const formData = new FormData()
+                    selectedFiles.value.forEach(file => {
+                        formData.append('files', file)
+                    })
+
+                    try {
+                        const response = await fetch('/api/upload', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        if (!response.ok) throw new Error('Upload failed')
+                        importResult.value = await response.json()
+                        // Reset file input
+                        selectedFiles.value = []
+                    } catch (error) {
+                        console.error(error)
+                        alert('导入失败: ' + error.message)
+                    } finally {
+                        uploading.value = false
+                    }
+                }
+
+                const ignoreConflict = (index) => {
+                    importResult.value.skipped_items.splice(index, 1)
+                    importResult.value.skipped -= 1
+                }
+
+                const overwriteConflict = async (item, index) => {
+                    if (!confirm(`确定要用新数据覆盖 "${item.name}" 吗？此操作不可撤销。`)) return
+
+                    try {
+                        const response = await fetch('/api/inscriptions/overwrite', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                existing_id: item.existing_id,
+                                new_data: item.new_data
+                            })
+                        })
+                        
+                        if (!response.ok) throw new Error('Overwrite failed')
+                        
+                        // Success: remove from list
+                        importResult.value.skipped_items.splice(index, 1)
+                        importResult.value.skipped -= 1
+                        importResult.value.success += 1 // Logically converted to success
+                        
+                        alert(`覆盖成功: ${item.name}`)
+                    } catch (error) {
+                        alert('覆盖失败: ' + error.message)
+                    }
+                }
+
+                const performManageSearch = async () => {
+                    try {
+                        const params = new URLSearchParams()
+                        if (manageSearchQuery.value) params.append('q', manageSearchQuery.value)
+                        params.append('fields', 'name') // Default search mainly by name for management
+                        
+                        const response = await fetch(`/api/search?${params.toString()}`)
+                        const data = await response.json()
+                        manageResults.value = data
+                    } catch (error) {
+                        console.error(error)
+                    }
+                }
+
+                const deleteItem = async (item) => {
+                    if (!confirm(`确定要删除 "${item.name}" 吗？`)) return
+                    
+                    try {
+                        const response = await fetch(`/api/inscriptions/${item.id}`, {
+                            method: 'DELETE'
+                        })
+                        if (!response.ok) throw new Error('Delete failed')
+                        
+                        // Remove from list
+                        manageResults.value = manageResults.value.filter(i => i.id !== item.id)
+                        alert('已删除')
+                    } catch (error) {
+                        alert('删除失败: ' + error.message)
+                    }
+                }
+                
+                const stripHtml = (html) => {
+                    if (!html) return ''
+                    const tmp = document.createElement('DIV')
+                    tmp.innerHTML = html
+                    return tmp.textContent || tmp.innerText || ''
+                }
+
+                // Initial load
+                onMounted(() => {
+                    performManageSearch()
+                })
+
+                return {
+                    currentTab,
+                    selectedFiles,
+                    uploading,
+                    importResult,
+                    manageSearchQuery,
+                    manageResults,
+                    handleFileSelect,
+                    uploadFiles,
+                    ignoreConflict,
+                    overwriteConflict,
+                    performManageSearch,
+                    deleteItem,
+                    stripHtml
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
