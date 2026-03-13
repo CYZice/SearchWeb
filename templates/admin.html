@@ -1,336 +1,540 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>碑文资料管理后台</title>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>资料管理后台 - 碑文金石资料检索系统</title>
     <style>
-        [v-cloak] { display: none; }
-        .line-clamp-2 {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+        :root {
+            --primary-color: #c0392b;
+            --secondary-color: #2c3e50;
+            --bg-color: #f9f9f9;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .nav-btn {
+            text-decoration: none;
+            color: var(--secondary-color);
+            font-weight: bold;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+        }
+
+        .tab.active {
+            background-color: white;
+            border-color: var(--border-color);
+            border-bottom-color: white;
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: -1px;
+        }
+
+        /* Upload Section */
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            padding: 40px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background-color: #fff9f9;
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+
+        .btn-danger {
+            background-color: #e74c3c;
+        }
+
+        /* Report Section */
+        .report-card {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .report-summary {
+            display: flex;
+            gap: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .success-text {
+            color: #27ae60;
+        }
+
+        .warning-text {
+            color: #f39c12;
+        }
+
+        .error-text {
+            color: #c0392b;
+        }
+
+        .conflict-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .conflict-item {
+            background: #fff8e1;
+            border: 1px solid #ffe0b2;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Search/Maintenance Section */
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background-color: #f2f2f2;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    {% raw %}
-    <div id="app" v-cloak class="flex min-h-screen">
-        
-        <!-- Sidebar -->
-        <div class="w-64 bg-gray-800 text-white flex-shrink-0">
-            <div class="p-6">
-                <h1 class="text-xl font-bold tracking-wider">资料管理系统</h1>
-            </div>
-            <nav class="mt-6">
-                <a @click="currentTab = 'import'" 
-                   :class="{'bg-gray-700 border-l-4 border-blue-500': currentTab === 'import', 'hover:bg-gray-700': currentTab !== 'import'}"
-                   class="block px-6 py-3 cursor-pointer transition-colors">
-                    资料导入
-                </a>
-                <a @click="currentTab = 'manage'" 
-                   :class="{'bg-gray-700 border-l-4 border-blue-500': currentTab === 'manage', 'hover:bg-gray-700': currentTab !== 'manage'}"
-                   class="block px-6 py-3 cursor-pointer transition-colors">
-                    数据维护
-                </a>
-                <a href="/" class="block px-6 py-3 hover:bg-gray-700 transition-colors mt-8 border-t border-gray-700">
-                    &larr; 返回检索首页
-                </a>
-            </nav>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>资料管理后台</h1>
+            <a href="/" class="nav-btn">← 返回检索首页</a>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('import')">资料导入</div>
+            <div class="tab" onclick="switchTab('maintain')">数据维护</div>
         </div>
 
-        <!-- Main Content -->
-        <div class="flex-grow p-8 overflow-y-auto h-screen">
-            
-            <!-- IMPORT TAB -->
-            <div v-if="currentTab === 'import'" class="max-w-4xl mx-auto">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">批量资料导入</h2>
-                
-                <!-- Upload Area -->
-                <div class="bg-white p-8 rounded-lg shadow-md mb-8">
-                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-10 text-center hover:bg-gray-50 transition-colors relative">
-                        <input type="file" multiple @change="handleFileSelect" accept=".docx,.doc" 
-                               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                        <div v-if="selectedFiles.length === 0">
-                            <p class="text-gray-500 text-lg">点击或拖拽 Word 文档到此处</p>
-                            <p class="text-gray-400 text-sm mt-2">支持批量上传</p>
-                        </div>
-                        <div v-else>
-                            <p class="text-blue-600 font-medium text-lg">已选择 {{ selectedFiles.length }} 个文件</p>
-                            <ul class="mt-4 text-left max-h-40 overflow-y-auto text-sm text-gray-600 space-y-1">
-                                <li v-for="file in selectedFiles" :key="file.name">{{ file.name }}</li>
-                            </ul>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-6 flex justify-end">
-                        <button @click="uploadFiles" :disabled="selectedFiles.length === 0 || uploading"
-                                class="bg-blue-600 text-white px-6 py-2 rounded shadow hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center">
-                            <span v-if="uploading" class="mr-2 animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
-                            {{ uploading ? '正在导入...' : '开始导入' }}
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Import Report -->
-                <div v-if="importResult" class="bg-white rounded-lg shadow-md overflow-hidden animate-fade-in-up">
-                    <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
-                        <h3 class="font-bold text-gray-700">导入报告</h3>
-                        <span class="text-sm text-gray-500">{{ new Date().toLocaleString() }}</span>
-                    </div>
-                    <div class="p-6">
-                        <div class="grid grid-cols-3 gap-4 mb-6 text-center">
-                            <div class="bg-green-50 p-4 rounded border border-green-200">
-                                <span class="block text-2xl font-bold text-green-600">{{ importResult.success }}</span>
-                                <span class="text-sm text-green-800">成功导入</span>
-                            </div>
-                            <div class="bg-yellow-50 p-4 rounded border border-yellow-200">
-                                <span class="block text-2xl font-bold text-yellow-600">{{ importResult.skipped }}</span>
-                                <span class="text-sm text-yellow-800">冲突跳过</span>
-                            </div>
-                            <div class="bg-red-50 p-4 rounded border border-red-200">
-                                <span class="block text-2xl font-bold text-red-600">{{ importResult.errors ? importResult.errors.length : 0 }}</span>
-                                <span class="text-sm text-red-800">错误</span>
-                            </div>
-                        </div>
-
-                        <!-- Conflict List -->
-                        <div v-if="importResult.skipped_items && importResult.skipped_items.length > 0">
-                            <h4 class="font-bold text-gray-800 mb-3 flex items-center">
-                                <span class="w-2 h-6 bg-yellow-500 mr-2 rounded"></span>
-                                冲突处理池
-                            </h4>
-                            <div class="border rounded-lg overflow-hidden">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead class="bg-gray-50">
-                                        <tr>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">器名</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">来源文件</th>
-                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">原因</th>
-                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="bg-white divide-y divide-gray-200">
-                                        <tr v-for="(item, index) in importResult.skipped_items" :key="index">
-                                            <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{{ item.name }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.source_file || '-' }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.reason }}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <button @click="ignoreConflict(index)" class="text-gray-400 hover:text-gray-600 mr-4">忽略</button>
-                                                <button @click="overwriteConflict(item, index)" class="text-blue-600 hover:text-blue-900">覆盖 (Overwrite)</button>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- Errors List -->
-                        <div v-if="importResult.errors && importResult.errors.length > 0" class="mt-6">
-                            <h4 class="font-bold text-red-800 mb-2">错误详情</h4>
-                            <ul class="list-disc list-inside text-sm text-red-600 bg-red-50 p-4 rounded">
-                                <li v-for="(err, idx) in importResult.errors" :key="idx">{{ err }}</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
+        <!-- Import Tab -->
+        <div id="import-section">
+            <div class="upload-area" id="drop-zone">
+                <h3>批量上传 Word 文档</h3>
+                <p>支持 .docx 格式，可拖拽文件至此</p>
+                <input type="file" id="file-input" multiple accept=".docx,.doc" style="display: none;">
+                <button class="btn" onclick="document.getElementById('file-input').click()">选择文件</button>
             </div>
 
-            <!-- MANAGE TAB -->
-            <div v-if="currentTab === 'manage'" class="max-w-5xl mx-auto">
-                <h2 class="text-2xl font-bold text-gray-800 mb-6">数据维护</h2>
-                
-                <!-- Search -->
-                <div class="mb-6 flex gap-4">
-                    <input v-model="manageSearchQuery" @keyup.enter="performManageSearch" type="text" 
-                           class="flex-grow border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                           placeholder="搜索器名...">
-                    <button @click="performManageSearch" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
-                        搜索
-                    </button>
+            <div id="upload-report" class="report-card">
+                <h4>导入报告</h4>
+                <div class="report-summary">
+                    <span class="success-text">成功: <span id="success-count">0</span></span>
+                    <span class="warning-text">跳过(重复): <span id="skipped-count">0</span></span>
+                    <span class="error-text">错误: <span id="error-count">0</span></span>
                 </div>
 
-                <!-- List -->
-                <div class="bg-white shadow rounded-lg overflow-hidden">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">编号</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">器名</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">时代</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">释文预览</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            <tr v-for="item in manageResults" :key="item.id">
-                                <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.id }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.serial_num }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{{ item.name }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-gray-500 text-sm">{{ item.era || '-' }}</td>
-                                <td class="px-6 py-4 text-gray-500 text-sm max-w-xs truncate" :title="stripHtml(item.transcript)">
-                                    {{ stripHtml(item.transcript) }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <button @click="deleteItem(item)" class="text-red-600 hover:text-red-900">删除</button>
-                                </td>
-                            </tr>
-                            <tr v-if="manageResults.length === 0">
-                                <td colspan="6" class="px-6 py-10 text-center text-gray-500">
-                                    暂无数据，请搜索或导入
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div id="conflict-section" style="display: none;">
+                    <h5>冲突列表 (器名重复)</h5>
+                    <ul class="conflict-list" id="conflict-list">
+                        <!-- Conflict items will be injected here -->
+                    </ul>
+                </div>
+
+                <div id="error-section" style="display: none;">
+                    <h5>错误详情</h5>
+                    <ul id="error-list" style="color: #c0392b;"></ul>
                 </div>
             </div>
+        </div>
 
+        <!-- Maintenance Tab -->
+        <div id="maintain-section" style="display: none;">
+            <div class="search-bar">
+                <input type="text" id="maintain-search" class="search-input" placeholder="输入器名或编号搜索...">
+                <button class="btn" onclick="searchData()">搜索</button>
+            </div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>器名</th>
+                        <th>时代</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="data-list">
+                    <!-- Data items will be injected here -->
+                </tbody>
+            </table>
         </div>
     </div>
-    {% endraw %}
+
+    <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+    </div>
 
     <script>
-        const { createApp, ref, onMounted } = Vue
+        // Tab Switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
 
-        createApp({
-            setup() {
-                const currentTab = ref('import')
-                const selectedFiles = ref([])
-                const uploading = ref(false)
-                const importResult = ref(null)
-                
-                // Manage Tab State
-                const manageSearchQuery = ref('')
-                const manageResults = ref([])
-
-                const handleFileSelect = (event) => {
-                    selectedFiles.value = Array.from(event.target.files)
-                    importResult.value = null
-                }
-
-                const uploadFiles = async () => {
-                    if (selectedFiles.value.length === 0) return
-                    
-                    uploading.value = true
-                    const formData = new FormData()
-                    selectedFiles.value.forEach(file => {
-                        formData.append('files', file)
-                    })
-
-                    try {
-                        const response = await fetch('/api/upload', {
-                            method: 'POST',
-                            body: formData
-                        })
-                        if (!response.ok) throw new Error('Upload failed')
-                        importResult.value = await response.json()
-                        // Reset file input
-                        selectedFiles.value = []
-                    } catch (error) {
-                        console.error(error)
-                        alert('导入失败: ' + error.message)
-                    } finally {
-                        uploading.value = false
-                    }
-                }
-
-                const ignoreConflict = (index) => {
-                    importResult.value.skipped_items.splice(index, 1)
-                    importResult.value.skipped -= 1
-                }
-
-                const overwriteConflict = async (item, index) => {
-                    if (!confirm(`确定要用新数据覆盖 "${item.name}" 吗？此操作不可撤销。`)) return
-
-                    try {
-                        const response = await fetch('/api/inscriptions/overwrite', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                existing_id: item.existing_id,
-                                new_data: item.new_data
-                            })
-                        })
-                        
-                        if (!response.ok) throw new Error('Overwrite failed')
-                        
-                        // Success: remove from list
-                        importResult.value.skipped_items.splice(index, 1)
-                        importResult.value.skipped -= 1
-                        importResult.value.success += 1 // Logically converted to success
-                        
-                        alert(`覆盖成功: ${item.name}`)
-                    } catch (error) {
-                        alert('覆盖失败: ' + error.message)
-                    }
-                }
-
-                const performManageSearch = async () => {
-                    try {
-                        const params = new URLSearchParams()
-                        if (manageSearchQuery.value) params.append('q', manageSearchQuery.value)
-                        params.append('fields', 'name') // Default search mainly by name for management
-                        
-                        const response = await fetch(`/api/search?${params.toString()}`)
-                        const data = await response.json()
-                        manageResults.value = data
-                    } catch (error) {
-                        console.error(error)
-                    }
-                }
-
-                const deleteItem = async (item) => {
-                    if (!confirm(`确定要删除 "${item.name}" 吗？`)) return
-                    
-                    try {
-                        const response = await fetch(`/api/inscriptions/${item.id}`, {
-                            method: 'DELETE'
-                        })
-                        if (!response.ok) throw new Error('Delete failed')
-                        
-                        // Remove from list
-                        manageResults.value = manageResults.value.filter(i => i.id !== item.id)
-                        alert('已删除')
-                    } catch (error) {
-                        alert('删除失败: ' + error.message)
-                    }
-                }
-                
-                const stripHtml = (html) => {
-                    if (!html) return ''
-                    const tmp = document.createElement('DIV')
-                    tmp.innerHTML = html
-                    return tmp.textContent || tmp.innerText || ''
-                }
-
-                // Initial load
-                onMounted(() => {
-                    performManageSearch()
-                })
-
-                return {
-                    currentTab,
-                    selectedFiles,
-                    uploading,
-                    importResult,
-                    manageSearchQuery,
-                    manageResults,
-                    handleFileSelect,
-                    uploadFiles,
-                    ignoreConflict,
-                    overwriteConflict,
-                    performManageSearch,
-                    deleteItem,
-                    stripHtml
-                }
+            if (tabName === 'import') {
+                document.getElementById('import-section').style.display = 'block';
+                document.getElementById('maintain-section').style.display = 'none';
+            } else {
+                document.getElementById('import-section').style.display = 'none';
+                document.getElementById('maintain-section').style.display = 'block';
+                searchData(); // Load initial data
             }
-        }).mount('#app')
+        }
+
+        // File Upload Logic
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#c0392b';
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ddd';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ddd';
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            showLoading(true);
+            try {
+                // Updated endpoint to support multiple files if backend supports it
+                // Current backend main.py only shows single file upload, let's check if we need to loop
+                // For now, let's assume we loop in frontend or backend supports list
+                // Based on user change, backend might need update for list.
+                // Let's implement loop for now to be safe with current single file endpoint, 
+                // OR update backend to accept List[UploadFile].
+                // Let's assume backend is single file for now based on previous Read.
+                // Wait, the user provided code snippet showed "async def upload_file(file: UploadFile...)"
+                // So we must loop.
+
+                let totalSuccess = 0;
+                let totalSkipped = 0;
+                let allSkippedItems = [];
+                let allErrors = [];
+
+                for (let i = 0; i < files.length; i++) {
+                    const singleFormData = new FormData();
+                    singleFormData.append('file', files[i]);
+
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: singleFormData
+                    });
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        totalSuccess += result.success;
+                        totalSkipped += result.skipped;
+                        if (result.skipped_items) {
+                            // Add source file info
+                            result.skipped_items.forEach(item => item.source_file = files[i].name);
+                            allSkippedItems.push(...result.skipped_items);
+                        }
+                    } else {
+                        allErrors.push(`${files[i].name}: ${result.detail}`);
+                    }
+                }
+
+                showReport({
+                    success: totalSuccess,
+                    skipped: totalSkipped,
+                    skipped_items: allSkippedItems,
+                    errors: allErrors
+                });
+
+            } catch (error) {
+                alert('上传失败: ' + error.message);
+            } finally {
+                showLoading(false);
+                fileInput.value = ''; // Reset
+            }
+        }
+
+        function showReport(data) {
+            const reportCard = document.getElementById('upload-report');
+            reportCard.style.display = 'block';
+
+            document.getElementById('success-count').textContent = data.success;
+            document.getElementById('skipped-count').textContent = data.skipped;
+            document.getElementById('error-count').textContent = (data.errors ? data.errors.length : 0);
+
+            // Render Conflicts
+            const conflictList = document.getElementById('conflict-list');
+            const conflictSection = document.getElementById('conflict-section');
+            conflictList.innerHTML = '';
+
+            if (data.skipped_items && data.skipped_items.length > 0) {
+                conflictSection.style.display = 'block';
+                data.skipped_items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'conflict-item';
+                    li.innerHTML = `
+                    <div>
+                        <strong>${item.name}</strong> <small>(${item.source_file || '未知来源'})</small><br>
+                        <span style="color: #666; font-size: 12px;">数据库ID: ${item.existing_id} | 原因: ${item.reason}</span>
+                    </div>
+                    <div>
+                        <button class="btn btn-small btn-danger" onclick="overwriteItem(${item.existing_id}, '${encodeURIComponent(JSON.stringify(item.new_data || {}))}')">强制覆盖</button>
+                    </div>
+                `;
+                    conflictList.appendChild(li);
+                });
+            } else {
+                conflictSection.style.display = 'none';
+            }
+
+            // Render Errors
+            const errorList = document.getElementById('error-list');
+            const errorSection = document.getElementById('error-section');
+            errorList.innerHTML = '';
+
+            if (data.errors && data.errors.length > 0) {
+                errorSection.style.display = 'block';
+                data.errors.forEach(err => {
+                    const li = document.createElement('li');
+                    li.textContent = err;
+                    errorList.appendChild(li);
+                });
+            } else {
+                errorSection.style.display = 'none';
+            }
+        }
+
+        async function overwriteItem(id, encodedData) {
+            if (!confirm('确定要用新数据覆盖这条记录吗？此操作不可恢复。')) return;
+
+            const newData = JSON.parse(decodeURIComponent(encodedData));
+            showLoading(true);
+            try {
+                const response = await fetch('/api/inscriptions/overwrite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        existing_id: id,
+                        new_data: newData
+                    })
+                });
+
+                if (response.ok) {
+                    alert('覆盖成功');
+                    // Remove from list visually
+                    // In a real app we might refresh or remove the specific LI
+                    location.reload(); // Simple refresh for now
+                } else {
+                    const err = await response.json();
+                    alert('覆盖失败: ' + err.detail);
+                }
+            } catch (e) {
+                alert('网络错误');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Maintenance Logic
+        async function searchData() {
+            const query = document.getElementById('maintain-search').value;
+            const tbody = document.getElementById('data-list');
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">加载中...</td></tr>';
+
+            try {
+                const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                const results = await response.json();
+
+                tbody.innerHTML = '';
+                if (results.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">无数据</td></tr>';
+                    return;
+                }
+
+                results.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                    <td>${item.id}</td>
+                    <td><a href="/api/inscriptions/${item.id}" target="_blank">${item.name}</a></td>
+                    <td>${item.era || '-'}</td>
+                    <td>
+                        <button class="btn btn-small btn-danger" onclick="deleteItem(${item.id})">删除</button>
+                    </td>
+                `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">加载失败</td></tr>';
+            }
+        }
+
+        async function deleteItem(id) {
+            if (!confirm(`确定要删除 ID:${id} 的记录吗？`)) return;
+
+            try {
+                const response = await fetch(`/api/inscriptions/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    searchData(); // Refresh list
+                } else {
+                    alert('删除失败');
+                }
+            } catch (e) {
+                alert('网络错误');
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'flex' : 'none';
+        }
     </script>
+
 </body>
+
 </html>
