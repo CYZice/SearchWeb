@@ -44,8 +44,19 @@
                         检索
                     </button>
                 </div>
-                <p class="mt-4 text-gray-500 text-sm text-center" v-if="!hasSearched">
-                    支持全字段模糊匹配，例如："耶律"、"赤峰"
+
+                <!-- Field Selection Checkboxes -->
+                <div class="mt-4 flex flex-wrap justify-center gap-4 bg-white/80 p-3 rounded-lg backdrop-blur-sm">
+                    <label v-for="field in fieldOptions" :key="field.value"
+                        class="flex items-center space-x-2 cursor-pointer select-none text-gray-700 hover:text-blue-600">
+                        <input type="checkbox" :value="field.value" v-model="selectedFields"
+                            class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                        <span class="text-sm font-medium">{{ field.label }}</span>
+                    </label>
+                </div>
+
+                <p class="mt-2 text-gray-500 text-sm text-center" v-if="!hasSearched">
+                    支持多字段组合筛选，例如："耶律"、"赤峰"
                 </p>
             </div>
         </div>
@@ -191,6 +202,20 @@
                 const selectedItem = ref(null)
                 const currentImageIndex = ref(0)
 
+                // Field options definition
+                const fieldOptions = [
+                    { value: 'name', label: '器名' },
+                    { value: 'transcript', label: '释文' },
+                    { value: 'discovery', label: '出土/发现' },
+                    { value: 'era', label: '时代' },
+                    { value: 'alias', label: '别称' },
+                    { value: 'collection', label: '现藏地点' },
+                    { value: 'publication', label: '著录' },
+                    { value: 'format', label: '形制' }
+                ]
+                // Default selected fields
+                const selectedFields = ref(['name', 'transcript', 'discovery'])
+
                 const performSearch = async () => {
                     if (!searchQuery.value.trim()) return
 
@@ -199,24 +224,26 @@
                     results.value = []
 
                     try {
-                        const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery.value)}`)
+                        // Build query parameters
+                        const params = new URLSearchParams()
+                        params.append('q', searchQuery.value)
+
+                        // Append each selected field
+                        if (selectedFields.value.length > 0) {
+                            selectedFields.value.forEach(field => {
+                                params.append('fields', field)
+                            })
+                        }
+
+                        const response = await fetch(`/api/search?${params.toString()}`)
+                        if (!response.ok) throw new Error('Network response was not ok')
                         const data = await response.json()
                         results.value = data
                     } catch (error) {
-                        console.error('Search failed:', error)
-                        alert('检索失败，请稍后重试')
+                        console.error('Error fetching search results:', error)
                     } finally {
                         loading.value = false
                     }
-                }
-
-                const openDetail = (item) => {
-                    selectedItem.value = item
-                    currentImageIndex.value = 0
-                }
-
-                const closeDetail = () => {
-                    selectedItem.value = null
                 }
 
                 return {
@@ -224,11 +251,20 @@
                     results,
                     loading,
                     hasSearched,
-                    performSearch,
                     selectedItem,
-                    openDetail,
-                    closeDetail,
-                    currentImageIndex
+                    currentImageIndex,
+                    fieldOptions,
+                    selectedFields,
+                    performSearch,
+                    openDetail: (item) => {
+                        selectedItem.value = item
+                        currentImageIndex.value = 0
+                        document.body.style.overflow = 'hidden'
+                    },
+                    closeDetail: () => {
+                        selectedItem.value = null
+                        document.body.style.overflow = ''
+                    }
                 }
             }
         }).mount('#app')

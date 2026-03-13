@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -32,8 +32,8 @@ async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/api/search")
-def search(q: str, db: Session = Depends(get_db)):
-    results = crud.search_inscriptions(db, q)
+def search(q: str, fields: Optional[List[str]] = Query(None), db: Session = Depends(get_db)):
+    results = crud.search_inscriptions(db, q, fields=fields)
     # Parse image_url JSON string back to list for response
     for item in results:
         if item.image_url:
