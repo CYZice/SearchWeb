@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碑文金石资料检索系统</title>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .highlight {
+            background-color: yellow;
+        }
+
+        [v-cloak] {
+            display: none;
+        }
+
+        .transcript-text {
+            white-space: pre-wrap;
+            font-family: "KaiTi", "STKaiti", serif;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    {% raw %}
+    <div id="app" v-cloak class="container mx-auto px-4 py-8">
+
+        <!-- Search Header -->
+        <div class="flex flex-col items-center justify-center mb-10 transition-all duration-500"
+            :class="{'h-[60vh]': !hasSearched, 'h-auto': hasSearched}">
+            <h1 class="text-4xl font-bold mb-8 text-gray-800 tracking-wider">碑文金石资料检索</h1>
+
+            <div class="w-full max-w-2xl relative">
+                <div
+                    class="flex shadow-lg rounded-full overflow-hidden border border-gray-300 hover:border-blue-500 hover:shadow-xl transition-all">
+                    <input v-model="searchQuery" @keyup.enter="performSearch" type="text"
+                        class="flex-grow px-6 py-4 text-lg focus:outline-none" placeholder="请输入器名、释文或出土地..." autofocus>
+                    <button @click="performSearch"
+                        class="bg-blue-600 text-white px-8 py-4 font-medium hover:bg-blue-700 transition-colors text-lg">
+                        检索
+                    </button>
+                </div>
+                <p class="mt-4 text-gray-500 text-sm text-center" v-if="!hasSearched">
+                    支持全字段模糊匹配，例如："耶律"、"赤峰"
+                </p>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="loading" class="text-center py-10">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            <p class="mt-2 text-gray-600">正在检索...</p>
+        </div>
+
+        <!-- Results List -->
+        <div v-if="hasSearched && !loading" class="max-w-4xl mx-auto">
+            <p class="text-gray-500 mb-4">找到 {{ results.length }} 条结果</p>
+
+            <div v-if="results.length === 0" class="text-center py-10 text-gray-500 bg-white rounded-lg shadow p-8">
+                未找到相关碑文资料，请尝试其他关键词。
+            </div>
+
+            <div v-for="item in results" :key="item.id"
+                class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow mb-6 overflow-hidden border border-gray-100">
+                <div class="p-6 cursor-pointer" @click="openDetail(item)">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">{{ item.serial_num
+                                    }}</span>
+                                <h2 class="text-xl font-bold text-blue-900">{{ item.name }}</h2>
+                            </div>
+                            <p class="text-sm text-gray-600 mb-1" v-if="item.era"><strong>时代：</strong>{{ item.era }}</p>
+                            <p class="text-sm text-gray-600 mb-1" v-if="item.discovery"><strong>出土：</strong>{{
+                                item.discovery }}</p>
+                            <p class="text-sm text-gray-500 line-clamp-2 mt-3 font-serif bg-gray-50 p-2 rounded">{{
+                                item.transcript }}</p>
+                        </div>
+
+                        <!-- Thumbnail if exists -->
+                        <div v-if="item.image_url && item.image_url.length > 0" class="ml-4 flex-shrink-0">
+                            <img :src="item.image_url[0]" class="w-24 h-24 object-cover rounded border border-gray-200"
+                                alt="缩略图">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detail Modal -->
+        <div v-if="selectedItem" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            @click.self="closeDetail">
+            <div
+                class="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
+
+                <!-- Modal Header -->
+                <div class="flex justify-between items-center p-6 border-b">
+                    <div>
+                        <span class="text-sm text-gray-500">{{ selectedItem.serial_num }}</span>
+                        <h2 class="text-2xl font-bold text-gray-900">{{ selectedItem.name }}</h2>
+                    </div>
+                    <button @click="closeDetail" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-grow flex overflow-hidden">
+                    <!-- Left: Text Info -->
+                    <div class="w-1/2 p-6 overflow-y-auto border-r bg-gray-50">
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="bg-white p-3 rounded shadow-sm">
+                                    <span class="text-xs text-gray-500 block">时代</span>
+                                    <span class="font-medium">{{ selectedItem.era || '-' }}</span>
+                                </div>
+                                <div class="bg-white p-3 rounded shadow-sm">
+                                    <span class="text-xs text-gray-500 block">形制</span>
+                                    <span class="font-medium">{{ selectedItem.format || '-' }}</span>
+                                </div>
+                                <div class="bg-white p-3 rounded shadow-sm col-span-2">
+                                    <span class="text-xs text-gray-500 block">出土/发现</span>
+                                    <span class="font-medium">{{ selectedItem.discovery || '-' }}</span>
+                                </div>
+                                <div class="bg-white p-3 rounded shadow-sm col-span-2">
+                                    <span class="text-xs text-gray-500 block">现藏</span>
+                                    <span class="font-medium">{{ selectedItem.collection || '-' }}</span>
+                                </div>
+                                <div class="bg-white p-3 rounded shadow-sm col-span-2">
+                                    <span class="text-xs text-gray-500 block">著录</span>
+                                    <span class="font-medium">{{ selectedItem.publication || '-' }}</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-6">
+                                <h3 class="font-bold text-gray-900 mb-2 border-l-4 border-blue-500 pl-2">释文</h3>
+                                <div
+                                    class="bg-white p-4 rounded shadow-sm transcript-text text-gray-800 leading-relaxed text-lg">
+                                    {{ selectedItem.transcript || '暂无释文' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Image Gallery -->
+                    <div class="w-1/2 p-6 bg-black flex flex-col items-center justify-center relative">
+                        <div v-if="selectedItem.image_url && selectedItem.image_url.length > 0"
+                            class="w-full h-full flex flex-col">
+
+                            <!-- Main Image -->
+                            <div class="flex-grow flex items-center justify-center overflow-hidden mb-4 relative group">
+                                <img :src="selectedItem.image_url[currentImageIndex]"
+                                    class="max-w-full max-h-full object-contain transition-transform duration-200"
+                                    style="cursor: zoom-in" onclick="window.open(this.src, '_blank')" title="点击查看原图">
+                                <div
+                                    class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded pointer-events-none">
+                                    点击图片查看高清原图
+                                </div>
+                            </div>
+
+                            <!-- Thumbnails -->
+                            <div class="flex gap-2 overflow-x-auto py-2 justify-center"
+                                v-if="selectedItem.image_url.length > 1">
+                                <img v-for="(img, idx) in selectedItem.image_url" :key="idx" :src="img"
+                                    @click="currentImageIndex = idx"
+                                    class="w-16 h-16 object-cover rounded border-2 cursor-pointer transition-all"
+                                    :class="currentImageIndex === idx ? 'border-blue-500 opacity-100' : 'border-transparent opacity-60 hover:opacity-100'">
+                            </div>
+                        </div>
+                        <div v-else class="text-gray-500">
+                            暂无图片
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    {% endraw %}
+
+    <script>
+        const { createApp, ref } = Vue
+
+        createApp({
+            setup() {
+                const searchQuery = ref('')
+                const results = ref([])
+                const loading = ref(false)
+                const hasSearched = ref(false)
+                const selectedItem = ref(null)
+                const currentImageIndex = ref(0)
+
+                const performSearch = async () => {
+                    if (!searchQuery.value.trim()) return
+
+                    loading.value = true
+                    hasSearched.value = true
+                    results.value = []
+
+                    try {
+                        const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery.value)}`)
+                        const data = await response.json()
+                        results.value = data
+                    } catch (error) {
+                        console.error('Search failed:', error)
+                        alert('检索失败，请稍后重试')
+                    } finally {
+                        loading.value = false
+                    }
+                }
+
+                const openDetail = (item) => {
+                    selectedItem.value = item
+                    currentImageIndex.value = 0
+                }
+
+                const closeDetail = () => {
+                    selectedItem.value = null
+                }
+
+                return {
+                    searchQuery,
+                    results,
+                    loading,
+                    hasSearched,
+                    performSearch,
+                    selectedItem,
+                    openDetail,
+                    closeDetail,
+                    currentImageIndex
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+
+</html>

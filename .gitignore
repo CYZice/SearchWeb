@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+venv/
+data/inscriptions.db
+data/raw_word/*.docx
+app/static/images/*.jpg
+app/static/images/*.png
+.DS_Store

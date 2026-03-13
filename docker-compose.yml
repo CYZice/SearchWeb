@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  inscription-app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist database file
+      - ./data/inscriptions.db:/app/data/inscriptions.db
+      # Persist images folder
+      - ./app/static/images:/app/app/static/images
+    restart: always
