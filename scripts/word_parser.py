@@ -2,6 +2,7 @@ import os
 import re
 import json
 import sys
+import hashlib
 from docx import Document
 from sqlalchemy.orm import Session
 
@@ -14,8 +15,13 @@ from app.database import engine, SessionLocal
 # Constants
 RAW_DOCS_DIR = "data/raw_word"
 IMAGES_DIR = "app/static/images"
+CHAR_IMAGES_DIR = "app/static/images/chars"
 # Ensure we use the correct path separator for URLs (forward slash)
 IMAGE_URL_PREFIX = "/static/images/"
+CHAR_IMAGE_URL_PREFIX = "/static/images/chars/"
+
+# Ensure char directory exists
+os.makedirs(CHAR_IMAGES_DIR, exist_ok=True)
 
 # Field Mapping
 FIELD_MAP = {
@@ -99,6 +105,32 @@ def save_image(image_part, serial_num, index):
         
     return f"{IMAGE_URL_PREFIX}{filename}"
 
+def save_char_image(image_part):
+    """
+    Save small character image based on content hash to avoid duplicates.
+    """
+    content = image_part.blob
+    # Calculate MD5 hash
+    md5_hash = hashlib.md5(content).hexdigest()
+    
+    # Determine extension
+    content_type = image_part.content_type
+    ext = "jpg"
+    if "png" in content_type:
+        ext = "png"
+    elif "jpeg" in content_type:
+        ext = "jpg"
+        
+    filename = f"{md5_hash}.{ext}"
+    filepath = os.path.join(CHAR_IMAGES_DIR, filename)
+    
+    # Only write if doesn't exist
+    if not os.path.exists(filepath):
+        with open(filepath, "wb") as f:
+            f.write(content)
+            
+    return f"{CHAR_IMAGE_URL_PREFIX}{filename}"
+
 def parse_docx(file_path, db: Session):
     doc = Document(file_path)
     
@@ -128,10 +160,11 @@ def parse_docx(file_path, db: Session):
             current_record = None
 
     for para in doc.paragraphs:
-        text = para.text.strip()
+        # Get raw text for pattern matching
+        raw_text = para.text.strip()
         
         # 1. Check for New Record Start
-        match = record_pattern.match(text)
+        match = record_pattern.match(raw_text)
         if match:
             save_current_record()
             
@@ -150,22 +183,37 @@ def parse_docx(file_path, db: Session):
         if current_record is None:
             continue
             
-        # 2. Extract Images in this paragraph
+        # 2. Process Content (Text + Images)
+        para_html_content = ""
+        
         for run in para.runs:
+            # Append run text
+            if run.text:
+                para_html_content += run.text
+            
+            # Check for images in this run
             images = get_images_from_run(run, doc)
             for img_part in images:
-                url = save_image(img_part, current_record['serial_num'], image_counter)
-                current_record['image_list'].append(url)
-                image_counter += 1
+                # Check size: If < 50KB (51200 bytes), treat as char image
+                if len(img_part.blob) < 51200:
+                    url = save_char_image(img_part)
+                    # Insert img tag inline
+                    para_html_content += f'<img src="{url}" class="inline-char" style="height: 1.2em; vertical-align: middle;" />'
+                else:
+                    # Treat as inscription image
+                    url = save_image(img_part, current_record['serial_num'], image_counter)
+                    current_record['image_list'].append(url)
+                    image_counter += 1
         
-        # 3. Parse Text Fields
-        if not text:
+        # 3. Parse Fields
+        if not raw_text and not para_html_content:
             continue
             
-        field_match = field_pattern.match(text)
+        field_match = field_pattern.match(raw_text)
         if field_match:
             key_raw = field_match.group(1).strip()
-            value = field_match.group(2).strip()
+            # We don't use group(2) from regex because it misses images.
+            # We need to strip the key part from para_html_content.
             
             # Find mapped key
             db_key = None
@@ -175,16 +223,38 @@ def parse_docx(file_path, db: Session):
                     break
             
             if db_key:
+                # Extract value from html content
+                # Locate the separator (colon) in html content
+                # This is a bit heuristic: find the first colon after the key length
+                # Simpler: just replace the first occurrence of key+colon regex pattern in the string?
+                # But regex on HTML string is risky if tags are involved.
+                # Since key is at start, we can try to find the colon index.
+                
+                # Iterate to find the first colon that matches the pattern logic
+                match_obj = re.match(r'^([^\s：:]+[\s]*[：:])', para_html_content)
+                if match_obj:
+                    # Found prefix in HTML content
+                    prefix = match_obj.group(1)
+                    value = para_html_content[len(prefix):].strip()
+                else:
+                    # Fallback if regex fails on html content (maybe tags interrupted?)
+                    # Just use the raw text value if no images involved in value
+                    value = field_match.group(2).strip()
+                    # If there were images, they might be lost or misplaced if we don't handle this carefully.
+                    # But if match_obj failed, it means the structure is weird.
+                    # Let's try to trust the regex on para_html_content first.
+                    pass
+
                 current_record[db_key] = value
                 current_field = db_key
             else:
-                # Unknown key, treat as continuation of previous field or ignore
+                # Unknown key, treat as continuation
                 if current_field:
-                    current_record[current_field] += "\n" + text
+                    current_record[current_field] += "\n" + para_html_content
         else:
-            # No key found, append to current field (e.g. multiline transcript)
+            # No key found, append to current field
             if current_field:
-                current_record[current_field] += "\n" + text
+                current_record[current_field] += "\n" + para_html_content
 
     # Save last record
     save_current_record()

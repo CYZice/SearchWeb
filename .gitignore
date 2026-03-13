@@ -9,3 +9,4 @@ data/raw_word/*.docx
 app/static/images/*.jpg
 app/static/images/*.png
 .DS_Store
+app/static/images/
