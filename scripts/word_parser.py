@@ -4,6 +4,7 @@ import json
 import sys
 import hashlib
 from docx import Document
+from docx.opc.exceptions import PackageNotFoundError
 from sqlalchemy.orm import Session
 
 # Add root to path
@@ -39,37 +40,39 @@ FIELD_MAP = {
     "著錄": "publication",
     "形制": "format",
     "释文": "transcript",
-    "釋文": "transcript"
+    "釋文": "transcript",
 }
+
 
 def setup_database():
     print("Recreating database tables...")
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
+
 def get_images_from_run(run, doc):
     """
     Extract image parts from a run.
     """
     images = []
-    
+
     # Namespaces usually used in docx xml
     nsmap = {
-        'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
-        'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
-        'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
+        "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+        "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+        "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
     }
-    
+
     if run.element is None:
         return images
 
     # Find drawing elements
     # Note: python-docx elements usually have nsmap
-    drawings = run.element.findall('.//w:drawing', run.element.nsmap)
-    
+    drawings = run.element.findall(".//w:drawing", run.element.nsmap)
+
     for drawing in drawings:
         # Find blip
-        blips = drawing.findall('.//a:blip', nsmap)
+        blips = drawing.findall(".//a:blip", nsmap)
         for blip in blips:
             embed_id = blip.get(f"{{{nsmap['r']}}}embed")
             if embed_id:
@@ -79,6 +82,7 @@ def get_images_from_run(run, doc):
                 except KeyError:
                     pass
     return images
+
 
 def save_image(image_part, serial_num, index):
     """
@@ -91,19 +95,20 @@ def save_image(image_part, serial_num, index):
         ext = "png"
     elif "jpeg" in content_type:
         ext = "jpg"
-    
+
     # Clean serial num for filename (remove brackets)
-    clean_serial = re.sub(r'[^\w]', '', serial_num)
+    clean_serial = re.sub(r"[^\w]", "", serial_num)
     if not clean_serial:
         clean_serial = "unknown"
-        
+
     filename = f"{clean_serial}_{index}.{ext}"
     filepath = os.path.join(IMAGES_DIR, filename)
-    
+
     with open(filepath, "wb") as f:
         f.write(image_part.blob)
-        
+
     return f"{IMAGE_URL_PREFIX}{filename}"
+
 
 def save_char_image(image_part):
     """
@@ -112,7 +117,7 @@ def save_char_image(image_part):
     content = image_part.blob
     # Calculate MD5 hash
     md5_hash = hashlib.md5(content).hexdigest()
-    
+
     # Determine extension
     content_type = image_part.content_type
     ext = "jpg"
@@ -120,16 +125,17 @@ def save_char_image(image_part):
         ext = "png"
     elif "jpeg" in content_type:
         ext = "jpg"
-        
+
     filename = f"{md5_hash}.{ext}"
     filepath = os.path.join(CHAR_IMAGES_DIR, filename)
-    
+
     # Only write if doesn't exist
     if not os.path.exists(filepath):
         with open(filepath, "wb") as f:
             f.write(content)
-            
+
     return f"{CHAR_IMAGE_URL_PREFIX}{filename}"
+
 
 def parse_docx(file_path):
     """
@@ -137,17 +143,17 @@ def parse_docx(file_path):
     Does NOT save to database.
     """
     doc = Document(file_path)
-    
+
     records = []
     current_record = None
     current_field = None
     image_counter = 1
-    
+
     # Regex for new record: 【017】 or [017]
-    record_pattern = re.compile(r'^[【\[](\d+)[】\]]')
-    
+    record_pattern = re.compile(r"^[【\[](\d+)[】\]]")
+
     # Regex for field: Key: Value
-    field_pattern = re.compile(r'^([^\s：:]+)[\s]*[：:](.*)')
+    field_pattern = re.compile(r"^([^\s：:]+)[\s]*[：:](.*)")
 
     def finalize_record():
         nonlocal current_record
@@ -156,41 +162,38 @@ def parse_docx(file_path):
             if "image_list" in current_record:
                 current_record["image_url"] = json.dumps(current_record["image_list"])
                 del current_record["image_list"]
-            
+
             records.append(current_record)
             current_record = None
 
     for para in doc.paragraphs:
         # Get raw text for pattern matching
         raw_text = para.text.strip()
-        
+
         # 1. Check for New Record Start
         match = record_pattern.match(raw_text)
         if match:
             finalize_record()
-            
-            serial_num_str = match.group(0) # e.g., 【017】
-            
-            current_record = {
-                "serial_num": serial_num_str,
-                "image_list": []
-            }
+
+            serial_num_str = match.group(0)  # e.g., 【017】
+
+            current_record = {"serial_num": serial_num_str, "image_list": []}
             image_counter = 1
             current_field = None
             continue
-            
+
         # If we are not in a record yet, skip (or handle preamble)
         if current_record is None:
             continue
-            
+
         # 2. Process Content (Text + Images)
         para_html_content = ""
-        
+
         for run in para.runs:
             # Append run text
             if run.text:
                 para_html_content += run.text
-            
+
             # Check for images in this run
             images = get_images_from_run(run, doc)
             for img_part in images:
@@ -201,31 +204,33 @@ def parse_docx(file_path):
                     para_html_content += f'<img src="{url}" class="inline-char" style="height: 1.2em; vertical-align: middle;" />'
                 else:
                     # Treat as inscription image
-                    url = save_image(img_part, current_record['serial_num'], image_counter)
-                    current_record['image_list'].append(url)
+                    url = save_image(
+                        img_part, current_record["serial_num"], image_counter
+                    )
+                    current_record["image_list"].append(url)
                     image_counter += 1
-        
+
         # 3. Parse Fields
         if not raw_text and not para_html_content:
             continue
-            
+
         field_match = field_pattern.match(raw_text)
         if field_match:
             key_raw = field_match.group(1).strip()
-            
+
             # Find mapped key
             db_key = None
             for k, v in FIELD_MAP.items():
                 if k in key_raw:
                     db_key = v
                     break
-            
+
             if db_key:
                 # Extract value from html content
-                match_obj = re.match(r'^([^\s：:]+[\s]*[：:])', para_html_content)
+                match_obj = re.match(r"^([^\s：:]+[\s]*[：:])", para_html_content)
                 if match_obj:
                     prefix = match_obj.group(1)
-                    value = para_html_content[len(prefix):].strip()
+                    value = para_html_content[len(prefix) :].strip()
                 else:
                     value = field_match.group(2).strip()
 
@@ -234,16 +239,31 @@ def parse_docx(file_path):
             else:
                 # Unknown key, treat as continuation
                 if current_field:
-                    current_record[current_field] += "\n" + para_html_content
+                    if current_field == "name":
+                        if current_record.get("transcript"):
+                            current_record["transcript"] += "\n" + para_html_content
+                        else:
+                            current_record["transcript"] = para_html_content
+                        current_field = "transcript"
+                    else:
+                        current_record[current_field] += "\n" + para_html_content
         else:
             # No key found, append to current field
             if current_field:
-                current_record[current_field] += "\n" + para_html_content
+                if current_field == "name":
+                    if current_record.get("transcript"):
+                        current_record["transcript"] += "\n" + para_html_content
+                    else:
+                        current_record["transcript"] = para_html_content
+                    current_field = "transcript"
+                else:
+                    current_record[current_field] += "\n" + para_html_content
 
     # Save last record
     finalize_record()
-    
+
     return records
+
 
 def process_import(file_path: str, db: Session):
     """
@@ -254,65 +274,114 @@ def process_import(file_path: str, db: Session):
     4. Return report
     """
     try:
+        if os.path.basename(file_path).startswith("~$"):
+            return {
+                "success": 0,
+                "skipped": 0,
+                "errors": [
+                    f"{os.path.basename(file_path)} 看起来是 Word 临时锁文件（~$ 开头），请关闭 Word 后重试或直接删除该文件"
+                ],
+            }
         parsed_records = parse_docx(file_path)
     except Exception as e:
         import traceback
+
         traceback.print_exc()
+        if isinstance(e, PackageNotFoundError):
+            return {
+                "success": 0,
+                "skipped": 0,
+                "errors": [
+                    f"无法打开为有效的 .docx 包：{os.path.basename(file_path)}（常见原因：~$ 临时锁文件、文件未下载完整或文件损坏）"
+                ],
+            }
         return {"success": 0, "skipped": 0, "errors": [str(e)]}
-        
+
     success_count = 0
     skipped_list = []
-    
+    processed_serials = set()
+
     for record in parsed_records:
-        name = record.get("name")
-        if not name:
-            # Skip records without name
+        serial_num = record.get("serial_num")
+        # 如果没有编号或没有名字，则跳过
+        if not serial_num or not record.get("name"):
             continue
-            
-        # Check duplicate
-        exists = db.query(Inscription).filter(Inscription.name == name).first()
+
+        # Check duplicate in current batch
+        if serial_num in processed_serials:
+            skipped_list.append(
+                {
+                    "serial_num": serial_num,
+                    "name": record.get("name"),
+                    "reason": "Duplicate Serial Number (in same document)",
+                    "new_data": record,
+                }
+            )
+            continue
+
+        # Check duplicate in database
+        exists = (
+            db.query(Inscription).filter(Inscription.serial_num == serial_num).first()
+        )
         if exists:
-            skipped_list.append({
-                "name": name,
-                "reason": "Duplicate Name",
-                "existing_id": exists.id,
-                "new_data": record  # Include full record data for potential overwrite
-            })
+            skipped_list.append(
+                {
+                    "serial_num": serial_num,
+                    "name": record.get("name"),
+                    "reason": "Duplicate Serial Number (in DB)",
+                    "existing_id": exists.id,
+                    "new_data": record,  # Include full record data for potential overwrite
+                }
+            )
             continue
-        
+
         # Save new record
+        processed_serials.add(serial_num)
         db_obj = Inscription(**record)
         db.add(db_obj)
         success_count += 1
-        
+
     db.commit()
-    
+
     return {
         "success": success_count,
         "skipped": len(skipped_list),
-        "skipped_items": skipped_list
+        "skipped_items": skipped_list,
     }
+
 
 def main():
     setup_database()
     db = SessionLocal()
-    
+
     if not os.path.exists(RAW_DOCS_DIR):
         print(f"Directory {RAW_DOCS_DIR} not found.")
         return
 
-    files = [f for f in os.listdir(RAW_DOCS_DIR) if f.endswith('.docx') or f.endswith('.doc')]
+    files = []
+    for filename in os.listdir(RAW_DOCS_DIR):
+        if filename.startswith("~$"):
+            continue
+        if not (filename.endswith(".docx") or filename.endswith(".doc")):
+            continue
+
+        path = os.path.join(RAW_DOCS_DIR, filename)
+        if not os.path.isfile(path):
+            continue
+
+        files.append(filename)
     if not files:
         print(f"No Word files found in {RAW_DOCS_DIR}")
-    
+
     for filename in files:
         path = os.path.join(RAW_DOCS_DIR, filename)
         print(f"Processing {filename}...")
         result = process_import(path, db)
         print(f"Result for {filename}: {result}")
-            
+
     db.close()
     print("Done.")
+
 
 if __name__ == "__main__":
     main()

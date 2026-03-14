@@ -5,8 +5,8 @@ class Inscription(Base):
     __tablename__ = "inscriptions"
 
     id = Column(Integer, primary_key=True, index=True)
-    serial_num = Column(String, index=True)  # 文档编号 (如：【017】)
-    name = Column(String, index=True, unique=True)        # 器名 (核心检索字段 - 唯一标识)
+    serial_num = Column(String, index=True, unique=True)  # 文档编号 (如：【017】)
+    name = Column(String, index=True)        # 器名 (核心检索字段 - 唯一标识)
     era = Column(String)                     # 时代
     alias = Column(String)                   # 别称
     discovery = Column(String)               # 出土/发现地
