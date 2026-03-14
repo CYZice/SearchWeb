@@ -152,8 +152,8 @@ def parse_docx(file_path):
     # Regex for new record: 【017】 or [017]
     record_pattern = re.compile(r"^[【\[](\d+)[】\]]")
 
-    # Regex for field: Key: Value
-    field_pattern = re.compile(r"^([^\s：:]+)[\s]*[：:](.*)")
+    # Regex for field: Key: Value (restrict key length to avoid matching long texts with colons)
+    field_pattern = re.compile(r"^([^，。；：！？\s：:]{1,10})[\s]*[：:](.*)")
 
     def finalize_record():
         nonlocal current_record
@@ -220,8 +220,10 @@ def parse_docx(file_path):
 
             # Find mapped key
             db_key = None
+            # Normalize key_raw (remove punctuation just in case)
+            key_clean = re.sub(r"[^\w\u4e00-\u9fa5]", "", key_raw)
             for k, v in FIELD_MAP.items():
-                if k in key_raw:
+                if k == key_clean or k in key_clean: # Exact or very close match
                     db_key = v
                     break
 
