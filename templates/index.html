@@ -53,7 +53,7 @@
                 <div
                     class="flex shadow-lg rounded-full overflow-hidden border border-gray-300 hover:border-blue-500 hover:shadow-xl transition-all">
                     <input v-model="searchQuery" @keyup.enter="performSearch" type="text"
-                        class="flex-grow px-6 py-4 text-lg focus:outline-none" placeholder="请输入器名、释文或出土地..." autofocus>
+                        class="flex-grow px-6 py-4 text-lg focus:outline-none" placeholder="请输入检索内容..." autofocus>
                     <button @click="performSearch"
                         class="bg-blue-600 text-white px-8 py-4 font-medium hover:bg-blue-700 transition-colors text-lg">
                         检索
@@ -70,9 +70,6 @@
                     </label>
                 </div>
 
-                <p class="mt-2 text-gray-500 text-sm text-center" v-if="!hasSearched">
-                    支持多字段组合筛选，例如："耶律"、"赤峰"
-                </p>
             </div>
         </div>
 
