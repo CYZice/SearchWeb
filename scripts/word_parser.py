@@ -43,6 +43,7 @@ FIELD_MAP = {
     "圖片": "image",
     "释文": "transcript",
     "釋文": "transcript",
+    "誌文": "transcript",
 }
 
 
