@@ -155,6 +155,10 @@
                                     <span class="text-xs text-gray-500 block">著录</span>
                                     <span class="font-medium">{{ selectedItem.publication || '-' }}</span>
                                 </div>
+                                <div class="bg-white p-3 rounded shadow-sm col-span-2">
+                                    <span class="text-xs text-gray-500 block">图片出处</span>
+                                    <span class="font-medium">{{ selectedItem.image || '-' }}</span>
+                                </div>
                             </div>
 
                             <div class="mt-6">
@@ -229,7 +233,8 @@
                     { value: 'alias', label: '别称' },
                     { value: 'collection', label: '现藏地点' },
                     { value: 'publication', label: '著录' },
-                    { value: 'format', label: '形制' }
+                    { value: 'format', label: '形制' },
+                    { value: 'image', label: '图片出处' }
                 ]
                 // Default selected fields
                 const selectedFields = ref(['name', 'transcript', 'discovery'])

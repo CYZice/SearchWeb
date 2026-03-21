@@ -39,6 +39,8 @@ FIELD_MAP = {
     "著录": "publication",
     "著錄": "publication",
     "形制": "format",
+    "图片": "image",
+    "圖片": "image",
     "释文": "transcript",
     "釋文": "transcript",
 }
@@ -223,7 +225,7 @@ def parse_docx(file_path):
             # Normalize key_raw (remove punctuation just in case)
             key_clean = re.sub(r"[^\w\u4e00-\u9fa5]", "", key_raw)
             for k, v in FIELD_MAP.items():
-                if k == key_clean or k in key_clean: # Exact or very close match
+                if k == key_clean or k in key_clean:  # Exact or very close match
                     db_key = v
                     break
 
