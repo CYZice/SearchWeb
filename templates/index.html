@@ -81,7 +81,7 @@
 
         <!-- Results List -->
         <div v-if="hasSearched && !loading" class="max-w-4xl mx-auto">
-            <p class="text-gray-500 mb-4">找到 {{ results.length }} 条结果</p>
+            <p class="text-gray-500 mb-4">找到 {{ totalResults }} 条结果</p>
 
             <div v-if="results.length === 0" class="text-center py-10 text-gray-500 bg-white rounded-lg shadow p-8">
                 未找到相关碑文资料，请尝试其他关键词。
@@ -111,6 +111,37 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div v-if="totalPages > 1" class="flex justify-center items-center space-x-2 mt-8 mb-4">
+                <button @click="goToPage(currentPage - 1)" :disabled="currentPage === 1"
+                    class="px-4 py-2 border rounded-md text-sm font-medium transition-colors"
+                    :class="currentPage === 1 ? 'text-gray-400 border-gray-200 cursor-not-allowed' : 'text-blue-600 border-blue-200 hover:bg-blue-50 bg-white'">
+                    上一页
+                </button>
+
+                <div class="flex space-x-1">
+                    <template v-for="page in totalPages" :key="page">
+                        <button
+                            v-if="page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2)"
+                            @click="goToPage(page)"
+                            class="px-4 py-2 border rounded-md text-sm font-medium transition-colors"
+                            :class="page === currentPage ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-700 bg-white border-gray-200 hover:bg-gray-50'">
+                            {{ page }}
+                        </button>
+                        <span v-else-if="page === currentPage - 3 || page === currentPage + 3"
+                            class="px-2 py-2 text-gray-500">
+                            ...
+                        </span>
+                    </template>
+                </div>
+
+                <button @click="goToPage(currentPage + 1)" :disabled="currentPage === totalPages"
+                    class="px-4 py-2 border rounded-md text-sm font-medium transition-colors"
+                    :class="currentPage === totalPages ? 'text-gray-400 border-gray-200 cursor-not-allowed' : 'text-blue-600 border-blue-200 hover:bg-blue-50 bg-white'">
+                    下一页
+                </button>
             </div>
         </div>
 
@@ -213,7 +244,7 @@
     {% endraw %}
 
     <script>
-        const { createApp, ref } = Vue
+        const { createApp, ref, computed } = Vue
 
         createApp({
             setup() {
@@ -223,6 +254,15 @@
                 const hasSearched = ref(false)
                 const selectedItem = ref(null)
                 const currentImageIndex = ref(0)
+
+                // Pagination state
+                const currentPage = ref(1)
+                const pageSize = ref(15)
+                const totalResults = ref(0)
+
+                const totalPages = computed(() => {
+                    return Math.ceil(totalResults.value / pageSize.value) || 1
+                })
 
                 // Field options definition
                 const fieldOptions = [
@@ -239,17 +279,20 @@
                 // Default selected fields
                 const selectedFields = ref(['name', 'transcript', 'discovery'])
 
-                const performSearch = async () => {
+                const performSearch = async (page = 1) => {
                     if (!searchQuery.value.trim()) return
 
                     loading.value = true
                     hasSearched.value = true
                     results.value = []
+                    currentPage.value = page
 
                     try {
                         // Build query parameters
                         const params = new URLSearchParams()
                         params.append('q', searchQuery.value)
+                        params.append('page', currentPage.value)
+                        params.append('size', pageSize.value)
 
                         // Append each selected field
                         if (selectedFields.value.length > 0) {
@@ -261,11 +304,19 @@
                         const response = await fetch(`/api/search?${params.toString()}`)
                         if (!response.ok) throw new Error('Network response was not ok')
                         const data = await response.json()
-                        results.value = data
+                        results.value = data.items
+                        totalResults.value = data.total
                     } catch (error) {
                         console.error('Error fetching search results:', error)
                     } finally {
                         loading.value = false
+                    }
+                }
+
+                const goToPage = (page) => {
+                    if (page >= 1 && page <= totalPages.value) {
+                        performSearch(page)
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
                     }
                 }
 
@@ -278,7 +329,11 @@
                     currentImageIndex,
                     fieldOptions,
                     selectedFields,
-                    performSearch,
+                    currentPage,
+                    totalPages,
+                    totalResults,
+                    performSearch: () => performSearch(1),
+                    goToPage,
                     openDetail: (item) => {
                         selectedItem.value = item
                         currentImageIndex.value = 0

@@ -86,11 +86,14 @@ def search_inscriptions(
         )
 
     q = db.query(models.Inscription).filter(or_(*conditions))
+    total_count = q.count()
 
     if ordering is not None:
-        q = q.order_by(ordering)
+        q = q.order_by(ordering, models.Inscription.serial_num)
+    else:
+        q = q.order_by(models.Inscription.serial_num)
 
-    return q.offset(skip).limit(limit).all()
+    return q.offset(skip).limit(limit).all(), total_count
 
 
 def get_inscription(db: Session, inscription_id: int):

@@ -52,9 +52,15 @@ async def read_root(request: Request):
 
 @app.get("/api/search")
 def search(
-    q: str, fields: Optional[List[str]] = Query(None), db: Session = Depends(get_db)
+    q: str,
+    fields: Optional[List[str]] = Query(None),
+    page: int = Query(1, ge=1),
+    size: int = Query(15, ge=1, le=100),
+    db: Session = Depends(get_db)
 ):
-    results = crud.search_inscriptions(db, q, fields=fields)
+    skip = (page - 1) * size
+    limit = size
+    results, total_count = crud.search_inscriptions(db, q, fields=fields, skip=skip, limit=limit)
     # Parse image_url JSON string back to list for response
     for item in results:
         if item.image_url:
@@ -62,7 +68,13 @@ def search(
                 item.image_url = json.loads(item.image_url)
             except:
                 item.image_url = []
-    return results
+    
+    return {
+        "items": results,
+        "total": total_count,
+        "page": page,
+        "size": size
+    }
 
 
 @app.get("/api/inscriptions/{inscription_id}")
