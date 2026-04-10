@@ -1,259 +1,684 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>碑文金石资料检索系统</title>
+    <!-- Google Fonts - Noto Serif SC -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
     <!-- Vue 3 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <!-- ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
     <style>
-        .highlight {
-            background-color: yellow;
+        :root {
+            /* 古典配色 */
+            --paper-white: #F5F0E6;
+            --paper-old: #E8DFD0;
+            --paper-dark: #D4C4A8;
+            --ink-black: #2C2C2C;
+            --ink-gray: #4A4A4A;
+            --vermilion: #C73E3A;
+            --vermilion-dark: #A62E2A;
+            --stone-green: #4A7C59;
+            --ochre: #8B6914;
+            --藏青: #1E3A5F;
+            --石绿: #3D6B4F;
+            --石青: #2E6B6B;
+            --金箔: #B8860B;
         }
 
-        [v-cloak] {
-            display: none;
+        * {
+            box-sizing: border-box;
         }
 
-        .transcript-text {
-            white-space: pre-wrap;
-            font-family: "KaiTi", "STKaiti", serif;
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--paper-white);
+            font-family: 'Noto Serif SC', 'STKaiti', 'KaiTi', serif;
+            color: var(--ink-black);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* 宣纸纹理背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        [v-cloak] { display: none; }
+
+        /* 标题字体 */
+        .font-xiaowei {
+            font-family: 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
+        }
+
+        /* 传统纹样角落装饰 */
+        .corner-ornament {
+            position: fixed;
+            width: 120px;
+            height: 120px;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .corner-ornament.top-left {
+            top: 0;
+            left: 0;
+            background: linear-gradient(135deg, var(--vermilion) 0%, transparent 50%);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 0 L100 0 L100 10 Q50 10 10 50 L10 100 L0 100 Z' fill='black'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 0 L100 0 L100 10 Q50 10 10 50 L10 100 L0 100 Z' fill='black'/%3E%3C/svg%3E");
+        }
+        .corner-ornament.top-right {
+            top: 0;
+            right: 0;
+            background: linear-gradient(225deg, var(--vermilion) 0%, transparent 50%);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 0 L0 0 L0 10 Q50 10 90 50 L90 100 L100 100 Z' fill='black'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 0 L0 0 L0 10 Q50 10 90 50 L90 100 L100 100 Z' fill='black'/%3E%3C/svg%3E");
+        }
+        .corner-ornament.bottom-left {
+            bottom: 0;
+            left: 0;
+            background: linear-gradient(45deg, var(--vermilion) 0%, transparent 50%);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 100 L100 100 L100 90 Q50 90 10 50 L10 0 L0 0 Z' fill='black'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 100 L100 100 L100 90 Q50 90 10 50 L10 0 L0 0 Z' fill='black'/%3E%3C/svg%3E");
+        }
+        .corner-ornament.bottom-right {
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(315deg, var(--vermilion) 0%, transparent 50%);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 100 L0 100 L0 90 Q50 90 90 50 L90 0 L100 0 Z' fill='black'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 100 L0 100 L0 90 Q50 90 90 50 L90 0 L100 0 Z' fill='black'/%3E%3C/svg%3E");
+        }
+
+        /* 毛笔分隔线 */
+        .brush-divider {
+            height: 3px;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                var(--ink-gray) 20%,
+                var(--vermilion) 50%,
+                var(--ink-gray) 80%,
+                transparent 100%
+            );
+            opacity: 0.6;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+        .brush-divider::before {
+            content: '◆';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--paper-white);
+            padding: 0 0.5rem;
+            color: var(--vermilion);
+            font-size: 0.8rem;
+        }
+
+        /* 搜索框样式 - 墨迹效果 */
+        .search-container {
+            position: relative;
+        }
+        .search-input {
+            width: 100%;
+            padding: 1rem 3.5rem 1rem 1.5rem;
+            font-size: 1.125rem;
+            font-family: 'Noto Serif SC', serif;
+            border: 2px solid var(--paper-dark);
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.7);
+            color: var(--ink-black);
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--vermilion);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow:
+                inset 0 2px 4px rgba(0,0,0,0.05),
+                0 0 0 3px rgba(199, 62, 58, 0.1);
+        }
+        .search-input::placeholder {
+            color: var(--ink-gray);
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        /* 印章风格按钮 */
+        .btn-seal {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 0.875rem;
+            border: 2px solid var(--ink-black);
+            background: transparent;
+            color: var(--ink-black);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-seal::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: var(--vermilion);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.3s, height 0.3s;
+            opacity: 0.3;
+        }
+        .btn-seal:hover::before {
+            width: 200%;
+            height: 200%;
+        }
+        .btn-seal:hover {
+            border-color: var(--vermilion);
+            color: var(--vermilion);
+        }
+        .btn-seal.active {
+            background: var(--vermilion);
+            border-color: var(--vermilion);
+            color: white;
+        }
+
+        /* 检索按钮 - 墨迹风格 */
+        .btn-search {
+            padding: 0.75rem 2rem;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--vermilion) 0%, var(--vermilion-dark) 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(199, 62, 58, 0.3);
+        }
+        .btn-search:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(199, 62, 58, 0.4);
+        }
+        .btn-search:active {
+            transform: translateY(0);
+        }
+
+        /* 字段选择标签 - 古籍书签风格 */
+        .field-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            border: 1px solid var(--paper-dark);
+            background: var(--paper-old);
+            color: var(--ink-gray);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .field-tag::before {
+            content: '';
+            position: absolute;
+            left: -1px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 60%;
+            background: transparent;
+            transition: background 0.2s;
+        }
+        .field-tag:hover {
+            background: var(--paper-dark);
+        }
+        .field-tag.selected {
+            background: var(--藏青);
+            color: white;
+            border-color: var(--藏青);
+        }
+        .field-tag.selected::before {
+            background: var(--vermilion);
+        }
+
+        /* 结果卡片 - 古籍书页风格 */
+        .result-card {
+            background: linear-gradient(145deg, #FFFEF9 0%, var(--paper-old) 100%);
+            border: 1px solid var(--paper-dark);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .result-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: transparent;
+            transition: background 0.3s;
+        }
+        .result-card:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .result-card:hover::before {
+            background: var(--vermilion);
+        }
+
+        /* 视图切换图标按钮 */
+        .view-toggle {
+            display: flex;
+            gap: 0.25rem;
+            background: var(--paper-old);
+            padding: 0.25rem;
+            border: 1px solid var(--paper-dark);
+        }
+        .view-toggle-btn {
+            padding: 0.5rem 0.75rem;
+            font-size: 1rem;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            opacity: 0.5;
+        }
+        .view-toggle-btn:hover {
+            opacity: 0.8;
+        }
+        .view-toggle-btn.active {
+            background: var(--藏青);
+            color: white;
+            opacity: 1;
+        }
+
+        /* 时代筛选输入框 */
+        .era-input {
+            padding: 0.5rem 1rem;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 0.875rem;
+            border: 1px solid var(--paper-dark);
+            background: rgba(255,255,255,0.7);
+            width: 120px;
+            transition: all 0.2s;
+        }
+        .era-input:focus {
+            outline: none;
+            border-color: var(--stone-green);
+            background: white;
+        }
+
+        /* 模态框 - 古籍卷轴风格 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(44, 44, 44, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 2rem;
+        }
+        .modal-content {
+            background: var(--paper-white);
+            max-width: 1000px;
+            width: 100%;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 3px solid var(--ink-black);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            background: linear-gradient(135deg, var(--藏青) 0%, #2A4A6F 100%);
+            color: white;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            line-height: 1;
+        }
+        .modal-close:hover {
+            opacity: 1;
+        }
+
+        /* 统计区域容器 */
+        .stats-panel {
+            background: linear-gradient(180deg, var(--paper-old) 0%, var(--paper-white) 100%);
+            border: 1px solid var(--paper-dark);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* 加载动画 - 印章旋转 */
+        .seal-loader {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--paper-dark);
+            border-top-color: var(--vermilion);
+            border-radius: 50%;
+            animation: seal-spin 1s linear infinite;
+        }
+        @keyframes seal-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 底部签名 */
+        .footer-seal {
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--vermilion);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            color: var(--vermilion);
+            transform: rotate(-5deg);
+            opacity: 0.6;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--paper-old);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--paper-dark);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--ink-gray);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .corner-ornament {
+                width: 60px;
+                height: 60px;
+            }
+            .result-card {
+                padding: 1rem;
+            }
         }
     </style>
 </head>
 
-<body class="bg-gray-50 min-h-screen">
-    {% raw %}
-    <div id="app" v-cloak class="container mx-auto px-4 py-8 relative">
+<body>
+    <!-- 角落装饰 -->
+    <div class="corner-ornament top-left"></div>
+    <div class="corner-ornament top-right"></div>
+    <div class="corner-ornament bottom-left"></div>
+    <div class="corner-ornament bottom-right"></div>
 
-        <!-- Top Right Management Link -->
-        <div class="absolute top-8 right-8">
+    {% raw %}
+    <div id="app" v-cloak class="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
+
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="font-xiaowei text-3xl text-[var(--ink-black)] tracking-wider">碑文金石资料检索</h1>
+                <p class="text-sm text-[var(--ink-gray)] mt-1 opacity-70">金石文献 · 数字化典藏</p>
+            </div>
             <a href="/admin"
-                class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                管理后台
+                class="btn-seal text-xs flex items-center gap-2">
+                <span>⚙</span>
+                <span>管理后台</span>
             </a>
         </div>
 
-        <!-- Search Header -->
-        <div class="flex flex-col items-center justify-center mb-10 transition-all duration-500"
-            :class="{'h-[30vh]': !hasSearched, 'h-auto': hasSearched}">
-            <h1 class="text-4xl font-bold mb-8 text-gray-800 tracking-wider">碑文金石资料检索</h1>
+        <!-- 毛笔分隔线 -->
+        <div class="brush-divider"></div>
 
-            <div class="w-full max-w-2xl relative">
-                <div
-                    class="flex shadow-lg rounded-full overflow-hidden border border-gray-300 hover:border-blue-500 hover:shadow-xl transition-all">
-                    <input v-model="searchQuery" @keyup.enter="performSearch" type="text"
-                        class="flex-grow px-6 py-4 text-lg focus:outline-none" placeholder="请输入检索内容..." autofocus>
-                    <button @click="performSearch"
-                        class="bg-blue-600 text-white px-8 py-4 font-medium hover:bg-blue-700 transition-colors text-lg">
-                        检索
+        <!-- 搜索区域 -->
+        <div class="mb-8">
+            <div class="flex gap-3 items-start">
+                <!-- 搜索框 -->
+                <div class="search-container flex-grow">
+                    <input
+                        v-model="searchQuery"
+                        @keyup.enter="performSearch"
+                        type="text"
+                        class="search-input"
+                        placeholder="输入检索关键词..."
+                        autofocus
+                    >
+                </div>
+
+                <!-- 检索按钮 -->
+                <button @click="performSearch" class="btn-search" :disabled="loading">
+                    <span v-if="loading">检索中...</span>
+                    <span v-else>检 索</span>
+                </button>
+
+                <!-- 视图切换 -->
+                <div class="view-toggle flex items-center">
+                    <button @click="activeTab = 'search'"
+                        class="view-toggle-btn"
+                        :class="{ active: activeTab === 'search' }"
+                        title="碑文检索">
+                        📜
+                    </button>
+                    <button @click="switchToWordCloud"
+                        class="view-toggle-btn"
+                        :class="{ active: activeTab === 'wordcloud' }"
+                        title="词云统计">
+                        ☁
+                    </button>
+                    <button @click="switchToFrequencies"
+                        class="view-toggle-btn"
+                        :class="{ active: activeTab === 'frequencies' }"
+                        title="词频统计">
+                        📊
                     </button>
                 </div>
+            </div>
 
-                <!-- Field Selection Checkboxes -->
-                <div class="mt-4 flex flex-wrap justify-center gap-4 bg-white/80 p-3 rounded-lg backdrop-blur-sm">
-                    <label v-for="field in fieldOptions" :key="field.value"
-                        class="flex items-center space-x-2 cursor-pointer select-none text-gray-700 hover:text-blue-600">
-                        <input type="checkbox" :value="field.value" v-model="selectedFields"
-                            class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
-                        <span class="text-sm font-medium">{{ field.label }}</span>
-                    </label>
-                </div>
-
+            <!-- 字段选择 -->
+            <div class="mt-4 flex flex-wrap gap-2 items-center">
+                <span class="text-sm text-[var(--ink-gray)] mr-2">检索范围：</span>
+                <span
+                    v-for="field in fieldOptions"
+                    :key="field.value"
+                    class="field-tag"
+                    :class="{ selected: selectedFields.includes(field.value) }"
+                    @click="toggleField(field.value)"
+                >
+                    {{ field.label }}
+                </span>
             </div>
         </div>
 
-        <!-- Tab Navigation -->
-        <div class="flex justify-center mb-6">
-            <div class="bg-white rounded-lg shadow-md p-1 inline-flex">
-                <button @click="activeTab = 'search'"
-                    :class="['px-6 py-2 rounded-lg font-medium transition-colors', activeTab === 'search' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100']">
-                    碑文检索
+        <!-- 统计面板（词云/词频） -->
+        <div class="stats-panel mb-6" v-show="activeTab === 'wordcloud' || activeTab === 'frequencies'">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-[var(--ink-black)]">
+                    {{ activeTab === 'wordcloud' ? '词云统计' : '词频分析' }}
+                </h3>
+                <div class="flex items-center gap-3" v-if="activeTab === 'frequencies'">
+                    <span class="text-sm text-[var(--ink-gray)]">时代筛选：</span>
+                    <input v-model="eraFilter"
+                        @keyup.enter="loadFrequencies"
+                        type="text"
+                        class="era-input"
+                        placeholder="如：唐代">
+                    <button @click="loadFrequencies" class="btn-seal text-xs">查询</button>
+                </div>
+            </div>
+
+            <!-- 词云视图 -->
+            <div v-if="activeTab === 'wordcloud'" class="text-center">
+                <div v-if="wordcloudLoading" class="py-20">
+                    <div class="seal-loader mx-auto"></div>
+                    <p class="mt-4 text-[var(--ink-gray)]">正在生成词云...</p>
+                </div>
+                <img v-else :src="wordcloudUrl" alt="词云" class="max-w-full rounded">
+            </div>
+
+            <!-- 词频视图 -->
+            <div v-if="activeTab === 'frequencies'">
+                <div v-if="frequenciesLoading" class="py-20 text-center">
+                    <div class="seal-loader mx-auto"></div>
+                    <p class="mt-4 text-[var(--ink-gray)]">正在加载数据...</p>
+                </div>
+                <div v-else id="frequencyChart" style="height: 400px;"></div>
+            </div>
+        </div>
+
+        <!-- 搜索结果 -->
+        <div v-if="hasSearched && !loading" class="mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <p class="text-[var(--ink-gray)]">
+                    找到 <span class="text-[var(--vermilion)] font-semibold">{{ results.length }}</span> 条结果
+                </p>
+                <button @click="activeTab = 'search'" class="btn-seal text-xs" v-if="activeTab !== 'search'">
+                    ← 返回检索视图
                 </button>
-                <button @click="switchToWordCloud"
-                    :class="['px-6 py-2 rounded-lg font-medium transition-colors', activeTab === 'wordcloud' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100']">
-                    词云统计
-                </button>
-                <button @click="switchToFrequencies"
-                    :class="['px-6 py-2 rounded-lg font-medium transition-colors', activeTab === 'frequencies' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100']">
-                    词频统计
-                </button>
             </div>
-        </div>
 
-        <!-- Word Cloud Section -->
-        <div v-if="activeTab === 'wordcloud'" class="max-w-4xl mx-auto mb-8">
-            <div class="bg-white rounded-lg shadow-md p-4 mb-4">
-                <div v-if="wordcloudLoading" class="flex items-center justify-center h-96">
-                    <div class="text-center">
-                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                        <p class="mt-4 text-gray-600">正在生成词云...</p>
-                    </div>
-                </div>
-                <img v-else :src="wordcloudUrl" alt="词云" class="w-full rounded">
-            </div>
-        </div>
-
-        <!-- Frequency Chart Section -->
-        <div v-if="activeTab === 'frequencies'" class="max-w-4xl mx-auto mb-8">
-            <div class="bg-white rounded-lg shadow-md p-6 mb-4">
-                <!-- Era Filter -->
-                <div class="flex items-center gap-4 mb-4">
-                    <label class="font-medium">时代筛选：</label>
-                    <input v-model="eraFilter" @keyup.enter="loadFrequencies" type="text" placeholder="如：天祿、會同"
-                        class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
-                    <button @click="loadFrequencies"
-                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                        查询
-                    </button>
-                </div>
-                <!-- Loading State -->
-                <div v-if="frequenciesLoading" class="flex items-center justify-center h-96">
-                    <div class="text-center">
-                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                        <p class="mt-4 text-gray-600">正在加载词频数据...</p>
-                    </div>
-                </div>
-                <!-- Chart Container -->
-                <div v-else id="frequencyChart" class="w-full" style="height: 500px;"></div>
-            </div>
-        </div>
-
-        <!-- Loading State -->
-        <div v-if="loading" class="text-center py-10">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            <p class="mt-2 text-gray-600">正在检索...</p>
-        </div>
-
-        <!-- Results List -->
-        <div v-if="hasSearched && !loading" class="max-w-4xl mx-auto">
-            <p class="text-gray-500 mb-4">找到 {{ results.length }} 条结果</p>
-
-            <div v-if="results.length === 0" class="text-center py-10 text-gray-500 bg-white rounded-lg shadow p-8">
-                未找到相关碑文资料，请尝试其他关键词。
+            <div v-if="results.length === 0" class="text-center py-16 bg-[var(--paper-old)] border border-[var(--paper-dark)]">
+                <p class="text-[var(--ink-gray)] text-lg">未找到相关碑文资料</p>
+                <p class="text-sm text-[var(--ink-gray)] mt-2 opacity-70">请尝试其他关键词或调整检索范围</p>
             </div>
 
             <div v-for="item in results" :key="item.id"
-                class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow mb-6 overflow-hidden border border-gray-100">
-                <div class="p-6 cursor-pointer" @click="openDetail(item)">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="flex items-center gap-2 mb-2">
-                                <span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">{{ item.serial_num
-                                    }}</span>
-                                <h2 class="text-xl font-bold text-blue-900">{{ item.name }}</h2>
-                            </div>
-                            <p class="text-sm text-gray-600 mb-1" v-if="item.era"><strong>时代：</strong>{{ item.era }}</p>
-                            <p class="text-sm text-gray-600 mb-1" v-if="item.discovery"><strong>出土：</strong>{{
-                                item.discovery }}</p>
-                            <p class="text-sm text-gray-500 line-clamp-2 mt-3 font-serif bg-gray-50 p-2 rounded"
-                                v-html="item.transcript"></p>
+                class="result-card"
+                @click="openDetail(item)">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="text-xs px-2 py-0.5 bg-[var(--paper-dark)] text-[var(--ink-gray)]"
+                                style="font-family: monospace;">{{ item.serial_num }}</span>
+                            <h2 class="text-xl font-semibold text-[var(--藏青)]">{{ item.name }}</h2>
                         </div>
-
-                        <!-- Thumbnail if exists -->
-                        <div v-if="item.image_url && item.image_url.length > 0" class="ml-4 flex-shrink-0">
-                            <img :src="item.image_url[0]" class="w-24 h-24 object-cover rounded border border-gray-200"
-                                alt="缩略图">
-                        </div>
+                        <p class="text-sm text-[var(--ink-gray)] mb-2" v-if="item.era">
+                            <span class="text-[var(--stone-green)]">时代：</span>{{ item.era }}
+                        </p>
+                        <p class="text-sm text-[var(--ink-gray)] mb-2" v-if="item.discovery">
+                            <span class="text-[var(--stone-green)]">出土：</span>{{ item.discovery }}
+                        </p>
+                        <p class="text-sm text-[var(--ink-gray)] mt-3 line-clamp-2 font-serif"
+                            style="font-family: 'STKaiti', 'KaiTi', serif;"
+                            v-html="item.transcript"></p>
+                    </div>
+                    <div v-if="item.image_url && item.image_url.length > 0" class="ml-4 flex-shrink-0">
+                        <img :src="item.image_url[0]"
+                            class="w-20 h-20 object-cover rounded border border-[var(--paper-dark)]">
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Detail Modal -->
-        <div v-if="selectedItem" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            @click.self="closeDetail">
-            <div
-                class="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
-
-                <!-- Modal Header -->
-                <div class="flex justify-between items-center p-6 border-b">
+        <!-- 详情模态框 -->
+        <div v-if="selectedItem" class="modal-overlay" @click.self="closeDetail">
+            <div class="modal-content">
+                <div class="modal-header">
                     <div>
-                        <span class="text-sm text-gray-500">{{ selectedItem.serial_num }}</span>
-                        <h2 class="text-2xl font-bold text-gray-900">{{ selectedItem.name }}</h2>
+                        <span class="text-sm opacity-70">{{ selectedItem.serial_num }}</span>
+                        <h2 class="text-xl font-xiaowei">{{ selectedItem.name }}</h2>
                     </div>
-                    <button @click="closeDetail" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                    <button @click="closeDetail" class="modal-close">×</button>
                 </div>
 
-                <!-- Modal Body -->
-                <div class="flex-grow flex overflow-hidden">
-                    <!-- Left: Text Info -->
-                    <div class="w-1/2 p-6 overflow-y-auto border-r bg-gray-50">
-                        <div class="space-y-4">
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="bg-white p-3 rounded shadow-sm">
-                                    <span class="text-xs text-gray-500 block">时代</span>
-                                    <span class="font-medium">{{ selectedItem.era || '-' }}</span>
-                                </div>
-                                <div class="bg-white p-3 rounded shadow-sm">
-                                    <span class="text-xs text-gray-500 block">形制</span>
-                                    <span class="font-medium">{{ selectedItem.format || '-' }}</span>
-                                </div>
-                                <div class="bg-white p-3 rounded shadow-sm col-span-2">
-                                    <span class="text-xs text-gray-500 block">出土/发现</span>
-                                    <span class="font-medium">{{ selectedItem.discovery || '-' }}</span>
-                                </div>
-                                <div class="bg-white p-3 rounded shadow-sm col-span-2">
-                                    <span class="text-xs text-gray-500 block">现藏</span>
-                                    <span class="font-medium">{{ selectedItem.collection || '-' }}</span>
-                                </div>
-                                <div class="bg-white p-3 rounded shadow-sm col-span-2">
-                                    <span class="text-xs text-gray-500 block">著录</span>
-                                    <span class="font-medium">{{ selectedItem.publication || '-' }}</span>
-                                </div>
-                                <div class="bg-white p-3 rounded shadow-sm col-span-2">
-                                    <span class="text-xs text-gray-500 block">图片出处</span>
-                                    <span class="font-medium">{{ selectedItem.image || '-' }}</span>
-                                </div>
+                <div class="flex flex-1 overflow-hidden">
+                    <!-- 左侧：文字信息 -->
+                    <div class="w-1/2 p-6 overflow-y-auto bg-[var(--paper-white)]">
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div class="bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">时代</span>
+                                <span class="font-medium">{{ selectedItem.era || '—' }}</span>
                             </div>
+                            <div class="bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">形制</span>
+                                <span class="font-medium">{{ selectedItem.format || '—' }}</span>
+                            </div>
+                            <div class="col-span-2 bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">出土/发现</span>
+                                <span class="font-medium">{{ selectedItem.discovery || '—' }}</span>
+                            </div>
+                            <div class="col-span-2 bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">现藏</span>
+                                <span class="font-medium">{{ selectedItem.collection || '—' }}</span>
+                            </div>
+                            <div class="col-span-2 bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">著录</span>
+                                <span class="font-medium">{{ selectedItem.publication || '—' }}</span>
+                            </div>
+                            <div class="col-span-2 bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">图片出处</span>
+                                <span class="font-medium">{{ selectedItem.image || '—' }}</span>
+                            </div>
+                        </div>
 
-                            <div class="mt-6">
-                                <h3 class="font-bold text-gray-900 mb-2 border-l-4 border-blue-500 pl-2">誌文</h3>
-                                <div class="bg-white p-4 rounded shadow-sm transcript-text text-gray-800 leading-relaxed text-lg"
-                                    v-html="selectedItem.transcript || '暂无誌文'">
-                                </div>
+                        <div class="mt-6">
+                            <h4 class="text-sm font-semibold text-[var(--vermilion)] mb-2 border-l-2 border-[var(--vermilion)] pl-2">誌文</h4>
+                            <div class="bg-[var(--paper-white)] p-4 border border-[var(--paper-dark)] font-serif leading-relaxed text-lg"
+                                style="font-family: 'STKaiti', 'KaiTi', serif; white-space: pre-wrap;"
+                                v-html="selectedItem.transcript || '暂无誌文'">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Right: Image Gallery -->
-                    <div class="w-1/2 p-6 bg-black flex flex-col items-center justify-center relative">
-                        <div v-if="selectedItem.image_url && selectedItem.image_url.length > 0"
-                            class="w-full h-full flex flex-col">
-
-                            <!-- Main Image -->
-                            <div class="flex-grow flex items-center justify-center overflow-hidden mb-4 relative group">
+                    <!-- 右侧：图片 -->
+                    <div class="w-1/2 bg-[var(--ink-black)] flex flex-col items-center justify-center p-4">
+                        <div v-if="selectedItem.image_url && selectedItem.image_url.length > 0" class="w-full h-full flex flex-col">
+                            <div class="flex-1 flex items-center justify-center overflow-hidden">
                                 <img :src="selectedItem.image_url[currentImageIndex]"
-                                    class="max-w-full max-h-full object-contain transition-transform duration-200"
-                                    style="cursor: zoom-in" onclick="window.open(this.src, '_blank')" title="点击查看原图">
-                                <div
-                                    class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded pointer-events-none">
-                                    点击图片查看高清原图
-                                </div>
+                                    class="max-w-full max-h-full object-contain cursor-pointer"
+                                    style="cursor: zoom-in"
+                                    onclick="window.open(this.src, '_blank')">
                             </div>
-
-                            <!-- Thumbnails -->
                             <div class="flex gap-2 overflow-x-auto py-2 justify-center"
                                 v-if="selectedItem.image_url.length > 1">
-                                <img v-for="(img, idx) in selectedItem.image_url" :key="idx" :src="img"
+                                <img v-for="(img, idx) in selectedItem.image_url"
+                                    :key="idx"
+                                    :src="img"
                                     @click="currentImageIndex = idx"
-                                    class="w-16 h-16 object-cover rounded border-2 cursor-pointer transition-all"
-                                    :class="currentImageIndex === idx ? 'border-blue-500 opacity-100' : 'border-transparent opacity-60 hover:opacity-100'">
+                                    class="w-14 h-14 object-cover rounded cursor-pointer transition-all"
+                                    :class="currentImageIndex === idx ? 'ring-2 ring-[var(--vermilion)]' : 'opacity-60'">
                             </div>
                         </div>
-                        <div v-else class="text-gray-500">
+                        <div v-else class="text-white opacity-50">
                             暂无图片
                         </div>
                     </div>
@@ -261,12 +686,14 @@
             </div>
         </div>
 
-        <!-- Footer -->
-        <footer class="mt-16 py-8 text-center text-gray-500 text-sm border-t border-gray-200">
-            <p>&copy; 2026 碑文金石资料检索系统</p>
-            <p class="mt-2 text-xs text-gray-400">Designed for academic research and preservation</p>
+        <!-- 页脚 -->
+        <div class="brush-divider mt-12"></div>
+        <footer class="flex justify-between items-center py-6 text-sm text-[var(--ink-gray)]">
+            <p>© 2026 碑文金石资料检索系统</p>
+            <div class="footer-seal">
+                <span>金石文献<br>数字化典藏</span>
+            </div>
         </footer>
-
     </div>
     {% endraw %}
 
@@ -291,16 +718,15 @@
                 let frequencyChart = null
                 let frequenciesLoaded = false
 
-                // Preload data on mount
                 onMounted(async () => {
-                    // Preload wordcloud image
+                    // 预加载词云
                     wordcloudLoading.value = true
                     const img = new Image()
                     img.onload = () => { wordcloudLoading.value = false }
                     img.src = '/api/wordcloud'
                     wordcloudUrl.value = img.src
 
-                    // Preload frequencies data
+                    // 预加载词频
                     frequenciesLoading.value = true
                     try {
                         const response = await fetch('/api/frequencies?top_n=30')
@@ -308,7 +734,6 @@
                         cachedFrequencies.value = data.frequencies
                         cachedEra.value = ''
                         frequenciesLoaded = true
-                        // Don't render here, wait for user to switch to tab
                     } catch (error) {
                         console.error('Error preloading frequencies:', error)
                     } finally {
@@ -316,31 +741,36 @@
                     }
                 })
 
-                // Field options definition
                 const fieldOptions = [
                     { value: 'name', label: '器名' },
                     { value: 'transcript', label: '誌文' },
-                    { value: 'discovery', label: '出土/发现' },
+                    { value: 'discovery', label: '出土' },
                     { value: 'era', label: '时代' },
                     { value: 'alias', label: '别称' },
-                    { value: 'collection', label: '现藏地点' },
+                    { value: 'collection', label: '现藏' },
                     { value: 'publication', label: '著录' },
                     { value: 'format', label: '形制' },
-                    { value: 'image', label: '图片出处' }
+                    { value: 'image', label: '图源' }
                 ]
-                // Default selected fields
                 const selectedFields = ref(['name', 'transcript', 'discovery'])
+
+                const toggleField = (field) => {
+                    const idx = selectedFields.value.indexOf(field)
+                    if (idx > -1) {
+                        selectedFields.value.splice(idx, 1)
+                    } else {
+                        selectedFields.value.push(field)
+                    }
+                }
 
                 const switchToWordCloud = () => {
                     activeTab.value = 'wordcloud'
-                    // Use cached wordcloud, no reload needed
                 }
 
                 const switchToFrequencies = () => {
                     activeTab.value = 'frequencies'
                     if (frequenciesLoaded && cachedFrequencies.value) {
                         nextTick(() => {
-                            // Reset chart instance since DOM was recreated
                             frequencyChart = null
                             renderFrequencyChart(cachedFrequencies.value)
                         })
@@ -351,15 +781,12 @@
 
                 const loadFrequencies = async (forceReload = false) => {
                     const currentEra = eraFilter.value.trim()
-
-                    // Use cache if available, era matches, and not forcing reload
                     if (!forceReload && cachedFrequencies.value && cachedEra.value === currentEra) {
                         nextTick(() => renderFrequencyChart(cachedFrequencies.value))
                         return
                     }
 
                     frequenciesLoading.value = true
-
                     let url = '/api/frequencies?top_n=30'
                     if (currentEra) {
                         url += '&era=' + encodeURIComponent(currentEra)
@@ -368,15 +795,10 @@
                     try {
                         const response = await fetch(url)
                         const data = await response.json()
-
-                        // Cache the data and era
                         cachedFrequencies.value = data.frequencies
                         cachedEra.value = currentEra
                         frequenciesLoaded = true
-
-                        // Wait for DOM to update, then initialize chart
                         await nextTick()
-
                         renderFrequencyChart(data.frequencies)
                     } catch (error) {
                         console.error('Error loading frequencies:', error)
@@ -386,19 +808,20 @@
                 }
 
                 const renderFrequencyChart = (frequencies) => {
-                    // Initialize or reinitialize chart (DOM may have been recreated)
                     frequencyChart = echarts.init(document.getElementById('frequencyChart'))
-
-                    // Prepare data (reverse for horizontal bar chart)
                     const yData = frequencies.map(f => f.word).reverse()
                     const xData = frequencies.map(f => f.count).reverse()
 
-                    // Configure chart
                     frequencyChart.setOption({
                         title: {
                             text: '词频统计 Top 30',
                             left: 'center',
-                            textStyle: { fontSize: 18, fontWeight: 'bold' }
+                            textStyle: {
+                                fontSize: 16,
+                                fontFamily: 'Noto Serif SC',
+                                fontWeight: '600',
+                                color: '#2C2C2C'
+                            }
                         },
                         tooltip: {
                             trigger: 'axis',
@@ -413,12 +836,12 @@
                         xAxis: {
                             type: 'value',
                             name: '出现次数',
-                            axisLabel: { fontSize: 12 }
+                            axisLabel: { fontSize: 11, fontFamily: 'Noto Serif SC' }
                         },
                         yAxis: {
                             type: 'category',
                             data: yData,
-                            axisLabel: { fontSize: 12 },
+                            axisLabel: { fontSize: 11, fontFamily: 'Noto Serif SC' },
                             name: '词语'
                         },
                         series: [{
@@ -427,14 +850,15 @@
                             data: xData,
                             itemStyle: {
                                 color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                                    { offset: 0, color: '#4ade80' },
-                                    { offset: 1, color: '#3b82f6' }
+                                    { offset: 0, color: '#4A7C59' },
+                                    { offset: 1, color: '#3D6B4F' }
                                 ])
                             },
                             label: {
                                 show: true,
                                 position: 'right',
-                                fontSize: 11
+                                fontSize: 10,
+                                fontFamily: 'Noto Serif SC'
                             }
                         }]
                     })
@@ -442,23 +866,16 @@
 
                 const performSearch = async () => {
                     if (!searchQuery.value.trim()) return
-
                     loading.value = true
                     hasSearched.value = true
                     results.value = []
 
                     try {
-                        // Build query parameters
                         const params = new URLSearchParams()
                         params.append('q', searchQuery.value)
-
-                        // Append each selected field
-                        if (selectedFields.value.length > 0) {
-                            selectedFields.value.forEach(field => {
-                                params.append('fields', field)
-                            })
-                        }
-
+                        selectedFields.value.forEach(field => {
+                            params.append('fields', field)
+                        })
                         const response = await fetch(`/api/search?${params.toString()}`)
                         if (!response.ok) throw new Error('Network response was not ok')
                         const data = await response.json()
@@ -484,7 +901,7 @@
                     wordcloudUrl,
                     wordcloudLoading,
                     frequenciesLoading,
-                    cachedFrequencies,
+                    toggleField,
                     performSearch,
                     switchToWordCloud,
                     switchToFrequencies,
@@ -503,5 +920,4 @@
         }).mount('#app')
     </script>
 </body>
-
 </html>
