@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碑文金石资料检索系统</title>
+    <!-- Google Fonts - Noto Serif SC -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        :root {
+            /* 古典配色 */
+            --paper-white: #F5F0E6;
+            --paper-old: #E8DFD0;
+            --paper-dark: #D4C4A8;
+            --ink-black: #2C2C2C;
+            --ink-gray: #4A4A4A;
+            --vermilion: #C73E3A;
+            --vermilion-dark: #A62E2A;
+            --stone-green: #4A7C59;
+            --ochre: #8B6914;
+            --藏青: #1E3A5F;
+            --石绿: #3D6B4F;
+            --石青: #2E6B6B;
+            --金箔: #B8860B;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--paper-white);
+            font-family: 'Noto Serif SC', 'STKaiti', 'KaiTi', serif;
+            color: var(--ink-black);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* 宣纸纹理背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        [v-cloak] { display: none; }
+
+        /* 标题字体 */
+        .font-xiaowei {
+            font-family: 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
+        }
+
+        /* 传统纹样角落装饰 */
+        .corner-ornament {
+            position: fixed;
+            width: 120px;
+            height: 120px;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .corner-ornament.top-left {
+            top: 0;
+            left: 0;
+            background: linear-gradient(135deg, var(--vermilion) 0%, transparent 50%);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 0 L100 0 L100 10 Q50 10 10 50 L10 100 L0 100 Z' fill='black'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 0 L100 0 L100 10 Q50 10 10 50 L10 100 L0 100 Z' fill='black'/%3E%3C/svg%3E");
+        }
+        .corner-ornament.top-right {
+            top: 0;
+            right: 0;
+            background: linear-gradient(225deg, var(--vermilion) 0%, transparent 50%);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 0 L0 0 L0 10 Q50 10 90 50 L90 100 L100 100 Z' fill='black'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 0 L0 0 L0 10 Q50 10 90 50 L90 100 L100 100 Z' fill='black'/%3E%3C/svg%3E");
+        }
+        .corner-ornament.bottom-left {
+            bottom: 0;
+            left: 0;
+            background: linear-gradient(45deg, var(--vermilion) 0%, transparent 50%);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 100 L100 100 L100 90 Q50 90 10 50 L10 0 L0 0 Z' fill='black'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M0 100 L100 100 L100 90 Q50 90 10 50 L10 0 L0 0 Z' fill='black'/%3E%3C/svg%3E");
+        }
+        .corner-ornament.bottom-right {
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(315deg, var(--vermilion) 0%, transparent 50%);
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 100 L0 100 L0 90 Q50 90 90 50 L90 0 L100 0 Z' fill='black'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M100 100 L0 100 L0 90 Q50 90 90 50 L90 0 L100 0 Z' fill='black'/%3E%3C/svg%3E");
+        }
+
+        /* 毛笔分隔线 */
+        .brush-divider {
+            height: 3px;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                var(--ink-gray) 20%,
+                var(--vermilion) 50%,
+                var(--ink-gray) 80%,
+                transparent 100%
+            );
+            opacity: 0.6;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+        .brush-divider::before {
+            content: '◆';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--paper-white);
+            padding: 0 0.5rem;
+            color: var(--vermilion);
+            font-size: 0.8rem;
+        }
+
+        /* 搜索框样式 - 墨迹效果 */
+        .search-container {
+            position: relative;
+        }
+        .search-input {
+            width: 100%;
+            padding: 1rem 3.5rem 1rem 1.5rem;
+            font-size: 1.125rem;
+            font-family: 'Noto Serif SC', serif;
+            border: 2px solid var(--paper-dark);
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.7);
+            color: var(--ink-black);
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--vermilion);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow:
+                inset 0 2px 4px rgba(0,0,0,0.05),
+                0 0 0 3px rgba(199, 62, 58, 0.1);
+        }
+        .search-input::placeholder {
+            color: var(--ink-gray);
+            opacity: 0.6;
+            font-style: italic;
+        }
+
+        /* 印章风格按钮 */
+        .btn-seal {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 0.875rem;
+            border: 2px solid var(--ink-black);
+            background: transparent;
+            color: var(--ink-black);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-seal::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: var(--vermilion);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.3s, height 0.3s;
+            opacity: 0.3;
+        }
+        .btn-seal:hover::before {
+            width: 200%;
+            height: 200%;
+        }
+        .btn-seal:hover {
+            border-color: var(--vermilion);
+            color: var(--vermilion);
+        }
+        .btn-seal.active {
+            background: var(--vermilion);
+            border-color: var(--vermilion);
+            color: white;
+        }
+
+        /* 检索按钮 - 墨迹风格 */
+        .btn-search {
+            padding: 0.75rem 2rem;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 1rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--vermilion) 0%, var(--vermilion-dark) 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(199, 62, 58, 0.3);
+        }
+        .btn-search:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(199, 62, 58, 0.4);
+        }
+        .btn-search:active {
+            transform: translateY(0);
+        }
+
+        /* 字段选择标签 - 古籍书签风格 */
+        .field-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            border: 1px solid var(--paper-dark);
+            background: var(--paper-old);
+            color: var(--ink-gray);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .field-tag::before {
+            content: '';
+            position: absolute;
+            left: -1px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 60%;
+            background: transparent;
+            transition: background 0.2s;
+        }
+        .field-tag:hover {
+            background: var(--paper-dark);
+        }
+        .field-tag.selected {
+            background: var(--藏青);
+            color: white;
+            border-color: var(--藏青);
+        }
+        .field-tag.selected::before {
+            background: var(--vermilion);
+        }
+
+        /* 结果卡片 - 古籍书页风格 */
+        .result-card {
+            background: linear-gradient(145deg, #FFFEF9 0%, var(--paper-old) 100%);
+            border: 1px solid var(--paper-dark);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .result-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: transparent;
+            transition: background 0.3s;
+        }
+        .result-card:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        }
+        .result-card:hover::before {
+            background: var(--vermilion);
+        }
+
+        /* 视图切换图标按钮 */
+        .view-toggle {
+            display: flex;
+            gap: 0.25rem;
+            background: var(--paper-old);
+            padding: 0.25rem;
+            border: 1px solid var(--paper-dark);
+        }
+        .view-toggle-btn {
+            padding: 0.5rem 0.75rem;
+            font-size: 1rem;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            opacity: 0.5;
+        }
+        .view-toggle-btn:hover {
+            opacity: 0.8;
+        }
+        .view-toggle-btn.active {
+            background: var(--藏青);
+            color: white;
+            opacity: 1;
+        }
+
+        /* 时代筛选输入框 */
+        .era-input {
+            padding: 0.5rem 1rem;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 0.875rem;
+            border: 1px solid var(--paper-dark);
+            background: rgba(255,255,255,0.7);
+            width: 120px;
+            transition: all 0.2s;
+        }
+        .era-input:focus {
+            outline: none;
+            border-color: var(--stone-green);
+            background: white;
+        }
+
+        /* 模态框 - 古籍卷轴风格 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(44, 44, 44, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 2rem;
+        }
+        .modal-content {
+            background: var(--paper-white);
+            max-width: 1000px;
+            width: 100%;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            border: 3px solid var(--ink-black);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            background: linear-gradient(135deg, var(--藏青) 0%, #2A4A6F 100%);
+            color: white;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            line-height: 1;
+        }
+        .modal-close:hover {
+            opacity: 1;
+        }
+
+        /* 统计区域容器 */
+        .stats-panel {
+            background: linear-gradient(180deg, var(--paper-old) 0%, var(--paper-white) 100%);
+            border: 1px solid var(--paper-dark);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* 加载动画 - 印章旋转 */
+        .seal-loader {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--paper-dark);
+            border-top-color: var(--vermilion);
+            border-radius: 50%;
+            animation: seal-spin 1s linear infinite;
+        }
+        @keyframes seal-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 底部签名 */
+        .footer-seal {
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--vermilion);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            color: var(--vermilion);
+            transform: rotate(-5deg);
+            opacity: 0.6;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--paper-old);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--paper-dark);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--ink-gray);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .corner-ornament {
+                width: 60px;
+                height: 60px;
+            }
+            .result-card {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 角落装饰 -->
+    <div class="corner-ornament top-left"></div>
+    <div class="corner-ornament top-right"></div>
+    <div class="corner-ornament bottom-left"></div>
+    <div class="corner-ornament bottom-right"></div>
+
+    {% raw %}
+    <div id="app" v-cloak class="relative z-10 container mx-auto px-4 py-8 max-w-5xl">
+
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="font-xiaowei text-3xl text-[var(--ink-black)] tracking-wider">碑文金石资料检索</h1>
+                <p class="text-sm text-[var(--ink-gray)] mt-1 opacity-70">金石文献 · 数字化典藏</p>
+            </div>
+            <a href="/admin"
+                class="btn-seal text-xs flex items-center gap-2">
+                <span>⚙</span>
+                <span>管理后台</span>
+            </a>
+        </div>
+
+        <!-- 毛笔分隔线 -->
+        <div class="brush-divider"></div>
+
+        <!-- 搜索区域 -->
+        <div class="mb-8">
+            <div class="flex gap-3 items-start">
+                <!-- 搜索框 -->
+                <div class="search-container flex-grow">
+                    <input
+                        v-model="searchQuery"
+                        @keyup.enter="performSearch"
+                        type="text"
+                        class="search-input"
+                        placeholder="输入检索关键词..."
+                        autofocus
+                    >
+                </div>
+
+                <!-- 检索按钮 -->
+                <button @click="performSearch" class="btn-search" :disabled="loading">
+                    <span v-if="loading">检索中...</span>
+                    <span v-else>检 索</span>
+                </button>
+
+                <!-- 视图切换 -->
+                <div class="view-toggle flex items-center">
+                    <button @click="activeTab = 'search'"
+                        class="view-toggle-btn"
+                        :class="{ active: activeTab === 'search' }"
+                        title="碑文检索">
+                        📜
+                    </button>
+                    <button @click="switchToWordCloud"
+                        class="view-toggle-btn"
+                        :class="{ active: activeTab === 'wordcloud' }"
+                        title="词云统计">
+                        ☁
+                    </button>
+                    <button @click="switchToFrequencies"
+                        class="view-toggle-btn"
+                        :class="{ active: activeTab === 'frequencies' }"
+                        title="词频统计">
+                        📊
+                    </button>
+                </div>
+            </div>
+
+            <!-- 字段选择 -->
+            <div class="mt-4 flex flex-wrap gap-2 items-center">
+                <span class="text-sm text-[var(--ink-gray)] mr-2">检索范围：</span>
+                <span
+                    v-for="field in fieldOptions"
+                    :key="field.value"
+                    class="field-tag"
+                    :class="{ selected: selectedFields.includes(field.value) }"
+                    @click="toggleField(field.value)"
+                >
+                    {{ field.label }}
+                </span>
+            </div>
+        </div>
+
+        <!-- 统计面板（词云/词频）- 始终显示 -->
+        <div class="stats-panel mb-6" v-show="activeTab !== 'search' || !hasSearched">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-[var(--ink-black)]">
+                    {{ activeTab === 'wordcloud' ? '词云统计' : '词频分析' }}
+                </h3>
+                <div class="flex items-center gap-3" v-if="activeTab === 'frequencies'">
+                    <span class="text-sm text-[var(--ink-gray)]">时代筛选：</span>
+                    <input v-model="eraFilter"
+                        @keyup.enter="loadFrequencies"
+                        type="text"
+                        class="era-input"
+                        placeholder="如：唐代">
+                    <button @click="loadFrequencies" class="btn-seal text-xs">查询</button>
+                </div>
+            </div>
+
+            <!-- 词云视图 -->
+            <div v-if="activeTab === 'wordcloud'" class="text-center">
+                <div v-if="wordcloudLoading" class="py-20">
+                    <div class="seal-loader mx-auto"></div>
+                    <p class="mt-4 text-[var(--ink-gray)]">正在生成词云...</p>
+                </div>
+                <img v-else :src="wordcloudUrl" alt="词云" class="max-w-full rounded">
+            </div>
+
+            <!-- 词频视图 -->
+            <div v-if="activeTab === 'frequencies'">
+                <div v-if="frequenciesLoading" class="py-20 text-center">
+                    <div class="seal-loader mx-auto"></div>
+                    <p class="mt-4 text-[var(--ink-gray)]">正在加载数据...</p>
+                </div>
+                <div v-else id="frequencyChart" style="height: 400px;"></div>
+            </div>
+        </div>
+
+        <!-- 搜索结果 -->
+        <div v-if="hasSearched && !loading" class="mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <p class="text-[var(--ink-gray)]">
+                    找到 <span class="text-[var(--vermilion)] font-semibold">{{ results.length }}</span> 条结果
+                </p>
+                <button @click="activeTab = 'search'" class="btn-seal text-xs" v-if="activeTab !== 'search'">
+                    ← 返回检索视图
+                </button>
+            </div>
+
+            <div v-if="results.length === 0" class="text-center py-16 bg-[var(--paper-old)] border border-[var(--paper-dark)]">
+                <p class="text-[var(--ink-gray)] text-lg">未找到相关碑文资料</p>
+                <p class="text-sm text-[var(--ink-gray)] mt-2 opacity-70">请尝试其他关键词或调整检索范围</p>
+            </div>
+
+            <div v-for="item in results" :key="item.id"
+                class="result-card"
+                @click="openDetail(item)">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="text-xs px-2 py-0.5 bg-[var(--paper-dark)] text-[var(--ink-gray)]"
+                                style="font-family: monospace;">{{ item.serial_num }}</span>
+                            <h2 class="text-xl font-semibold text-[var(--藏青)]">{{ item.name }}</h2>
+                        </div>
+                        <p class="text-sm text-[var(--ink-gray)] mb-2" v-if="item.era">
+                            <span class="text-[var(--stone-green)]">时代：</span>{{ item.era }}
+                        </p>
+                        <p class="text-sm text-[var(--ink-gray)] mb-2" v-if="item.discovery">
+                            <span class="text-[var(--stone-green)]">出土：</span>{{ item.discovery }}
+                        </p>
+                        <p class="text-sm text-[var(--ink-gray)] mt-3 line-clamp-2 font-serif"
+                            style="font-family: 'STKaiti', 'KaiTi', serif;"
+                            v-html="item.transcript"></p>
+                    </div>
+                    <div v-if="item.image_url && item.image_url.length > 0" class="ml-4 flex-shrink-0">
+                        <img :src="item.image_url[0]"
+                            class="w-20 h-20 object-cover rounded border border-[var(--paper-dark)]">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 详情模态框 -->
+        <div v-if="selectedItem" class="modal-overlay" @click.self="closeDetail">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <span class="text-sm opacity-70">{{ selectedItem.serial_num }}</span>
+                        <h2 class="text-xl font-xiaowei">{{ selectedItem.name }}</h2>
+                    </div>
+                    <button @click="closeDetail" class="modal-close">×</button>
+                </div>
+
+                <div class="flex flex-1 overflow-hidden">
+                    <!-- 左侧：文字信息 -->
+                    <div class="w-1/2 p-6 overflow-y-auto bg-[var(--paper-white)]">
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div class="bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">时代</span>
+                                <span class="font-medium">{{ selectedItem.era || '—' }}</span>
+                            </div>
+                            <div class="bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">形制</span>
+                                <span class="font-medium">{{ selectedItem.format || '—' }}</span>
+                            </div>
+                            <div class="col-span-2 bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">出土/发现</span>
+                                <span class="font-medium">{{ selectedItem.discovery || '—' }}</span>
+                            </div>
+                            <div class="col-span-2 bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">现藏</span>
+                                <span class="font-medium">{{ selectedItem.collection || '—' }}</span>
+                            </div>
+                            <div class="col-span-2 bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">著录</span>
+                                <span class="font-medium">{{ selectedItem.publication || '—' }}</span>
+                            </div>
+                            <div class="col-span-2 bg-[var(--paper-old)] p-2">
+                                <span class="text-xs text-[var(--ink-gray)] block">图片出处</span>
+                                <span class="font-medium">{{ selectedItem.image || '—' }}</span>
+                            </div>
+                        </div>
+
+                        <div class="mt-6">
+                            <h4 class="text-sm font-semibold text-[var(--vermilion)] mb-2 border-l-2 border-[var(--vermilion)] pl-2">誌文</h4>
+                            <div class="bg-[var(--paper-white)] p-4 border border-[var(--paper-dark)] font-serif leading-relaxed text-lg"
+                                style="font-family: 'STKaiti', 'KaiTi', serif; white-space: pre-wrap;"
+                                v-html="selectedItem.transcript || '暂无誌文'">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：图片 -->
+                    <div class="w-1/2 bg-[var(--ink-black)] flex flex-col items-center justify-center p-4">
+                        <div v-if="selectedItem.image_url && selectedItem.image_url.length > 0" class="w-full h-full flex flex-col">
+                            <div class="flex-1 flex items-center justify-center overflow-hidden">
+                                <img :src="selectedItem.image_url[currentImageIndex]"
+                                    class="max-w-full max-h-full object-contain cursor-pointer"
+                                    style="cursor: zoom-in"
+                                    onclick="window.open(this.src, '_blank')">
+                            </div>
+                            <div class="flex gap-2 overflow-x-auto py-2 justify-center"
+                                v-if="selectedItem.image_url.length > 1">
+                                <img v-for="(img, idx) in selectedItem.image_url"
+                                    :key="idx"
+                                    :src="img"
+                                    @click="currentImageIndex = idx"
+                                    class="w-14 h-14 object-cover rounded cursor-pointer transition-all"
+                                    :class="currentImageIndex === idx ? 'ring-2 ring-[var(--vermilion)]' : 'opacity-60'">
+                            </div>
+                        </div>
+                        <div v-else class="text-white opacity-50">
+                            暂无图片
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <div class="brush-divider mt-12"></div>
+        <footer class="flex justify-between items-center py-6 text-sm text-[var(--ink-gray)]">
+            <p>© 2026 碑文金石资料检索系统</p>
+            <div class="footer-seal">
+                <span>金石文献<br>数字化典藏</span>
+            </div>
+        </footer>
+    </div>
+    {% endraw %}
+
+    <script>
+        const { createApp, ref, nextTick, onMounted } = Vue
+
+        createApp({
+            setup() {
+                const searchQuery = ref('')
+                const results = ref([])
+                const loading = ref(false)
+                const hasSearched = ref(false)
+                const selectedItem = ref(null)
+                const currentImageIndex = ref(0)
+                const activeTab = ref('search')
+                const eraFilter = ref('')
+                const wordcloudUrl = ref('')
+                const wordcloudLoading = ref(false)
+                const frequenciesLoading = ref(false)
+                const cachedFrequencies = ref(null)
+                const cachedEra = ref('')
+                let frequencyChart = null
+                let frequenciesLoaded = false
+
+                onMounted(async () => {
+                    // 预加载词云
+                    wordcloudLoading.value = true
+                    const img = new Image()
+                    img.onload = () => { wordcloudLoading.value = false }
+                    img.src = '/api/wordcloud'
+                    wordcloudUrl.value = img.src
+
+                    // 预加载词频
+                    frequenciesLoading.value = true
+                    try {
+                        const response = await fetch('/api/frequencies?top_n=30')
+                        const data = await response.json()
+                        cachedFrequencies.value = data.frequencies
+                        cachedEra.value = ''
+                        frequenciesLoaded = true
+                    } catch (error) {
+                        console.error('Error preloading frequencies:', error)
+                    } finally {
+                        frequenciesLoading.value = false
+                    }
+                })
+
+                const fieldOptions = [
+                    { value: 'name', label: '器名' },
+                    { value: 'transcript', label: '誌文' },
+                    { value: 'discovery', label: '出土' },
+                    { value: 'era', label: '时代' },
+                    { value: 'alias', label: '别称' },
+                    { value: 'collection', label: '现藏' },
+                    { value: 'publication', label: '著录' },
+                    { value: 'format', label: '形制' },
+                    { value: 'image', label: '图源' }
+                ]
+                const selectedFields = ref(['name', 'transcript', 'discovery'])
+
+                const toggleField = (field) => {
+                    const idx = selectedFields.value.indexOf(field)
+                    if (idx > -1) {
+                        selectedFields.value.splice(idx, 1)
+                    } else {
+                        selectedFields.value.push(field)
+                    }
+                }
+
+                const switchToWordCloud = () => {
+                    activeTab.value = 'wordcloud'
+                }
+
+                const switchToFrequencies = () => {
+                    activeTab.value = 'frequencies'
+                    if (frequenciesLoaded && cachedFrequencies.value) {
+                        nextTick(() => {
+                            frequencyChart = null
+                            renderFrequencyChart(cachedFrequencies.value)
+                        })
+                    } else {
+                        loadFrequencies()
+                    }
+                }
+
+                const loadFrequencies = async (forceReload = false) => {
+                    const currentEra = eraFilter.value.trim()
+                    if (!forceReload && cachedFrequencies.value && cachedEra.value === currentEra) {
+                        nextTick(() => renderFrequencyChart(cachedFrequencies.value))
+                        return
+                    }
+
+                    frequenciesLoading.value = true
+                    let url = '/api/frequencies?top_n=30'
+                    if (currentEra) {
+                        url += '&era=' + encodeURIComponent(currentEra)
+                    }
+
+                    try {
+                        const response = await fetch(url)
+                        const data = await response.json()
+                        cachedFrequencies.value = data.frequencies
+                        cachedEra.value = currentEra
+                        frequenciesLoaded = true
+                        await nextTick()
+                        renderFrequencyChart(data.frequencies)
+                    } catch (error) {
+                        console.error('Error loading frequencies:', error)
+                    } finally {
+                        frequenciesLoading.value = false
+                    }
+                }
+
+                const renderFrequencyChart = (frequencies) => {
+                    frequencyChart = echarts.init(document.getElementById('frequencyChart'))
+                    const yData = frequencies.map(f => f.word).reverse()
+                    const xData = frequencies.map(f => f.count).reverse()
+
+                    frequencyChart.setOption({
+                        title: {
+                            text: '词频统计 Top 30',
+                            left: 'center',
+                            textStyle: {
+                                fontSize: 16,
+                                fontFamily: 'Noto Serif SC',
+                                fontWeight: '600',
+                                color: '#2C2C2C'
+                            }
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: { type: 'shadow' }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '10%',
+                            bottom: '3%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'value',
+                            name: '出现次数',
+                            axisLabel: { fontSize: 11, fontFamily: 'Noto Serif SC' }
+                        },
+                        yAxis: {
+                            type: 'category',
+                            data: yData,
+                            axisLabel: { fontSize: 11, fontFamily: 'Noto Serif SC' },
+                            name: '词语'
+                        },
+                        series: [{
+                            name: '出现次数',
+                            type: 'bar',
+                            data: xData,
+                            itemStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                                    { offset: 0, color: '#4A7C59' },
+                                    { offset: 1, color: '#3D6B4F' }
+                                ])
+                            },
+                            label: {
+                                show: true,
+                                position: 'right',
+                                fontSize: 10,
+                                fontFamily: 'Noto Serif SC'
+                            }
+                        }]
+                    })
+                }
+
+                const performSearch = async () => {
+                    if (!searchQuery.value.trim()) return
+                    loading.value = true
+                    hasSearched.value = true
+                    results.value = []
+
+                    try {
+                        const params = new URLSearchParams()
+                        params.append('q', searchQuery.value)
+                        selectedFields.value.forEach(field => {
+                            params.append('fields', field)
+                        })
+                        const response = await fetch(`/api/search?${params.toString()}`)
+                        if (!response.ok) throw new Error('Network response was not ok')
+                        const data = await response.json()
+                        results.value = data
+                    } catch (error) {
+                        console.error('Error fetching search results:', error)
+                    } finally {
+                        loading.value = false
+                    }
+                }
+
+                return {
+                    searchQuery,
+                    results,
+                    loading,
+                    hasSearched,
+                    selectedItem,
+                    currentImageIndex,
+                    fieldOptions,
+                    selectedFields,
+                    activeTab,
+                    eraFilter,
+                    wordcloudUrl,
+                    wordcloudLoading,
+                    frequenciesLoading,
+                    toggleField,
+                    performSearch,
+                    switchToWordCloud,
+                    switchToFrequencies,
+                    loadFrequencies,
+                    openDetail: (item) => {
+                        selectedItem.value = item
+                        currentImageIndex.value = 0
+                        document.body.style.overflow = 'hidden'
+                    },
+                    closeDetail: () => {
+                        selectedItem.value = null
+                        document.body.style.overflow = ''
+                    }
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
