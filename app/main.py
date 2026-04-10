@@ -12,7 +12,7 @@ import io
 from scripts import word_parser
 
 from . import models, crud, database
-from .services import get_all_transcripts, tokenize_chinese, generate_wordcloud_image, get_word_frequencies
+from .services import get_all_transcripts, tokenize_chinese, generate_wordcloud_image, get_word_frequencies, invalidate_cache
 
 # Create tables
 models.Base.metadata.create_all(bind=database.engine)
@@ -50,6 +50,12 @@ def get_db():
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@app.get("/preview", response_class=HTMLResponse)
+async def preview_new_design(request: Request):
+    """临时预览新古典风格页面"""
+    return templates.TemplateResponse("index_new.html", {"request": request})
 
 
 @app.get("/api/search")
@@ -111,6 +117,10 @@ def overwrite_inscription(data: dict, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(db_obj)
+
+    # 数据更新后清除缓存
+    invalidate_cache()
+
     return {"status": "success", "id": db_obj.id, "name": db_obj.name}
 
 
@@ -124,6 +134,10 @@ def delete_inscription(inscription_id: int, db: Session = Depends(get_db)):
 
     db.delete(db_obj)
     db.commit()
+
+    # 数据删除后清除缓存
+    invalidate_cache()
+
     return {"status": "success", "message": f"Inscription {inscription_id} deleted"}
 
 
@@ -233,6 +247,10 @@ async def upload_files(
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+
+    # 数据更新后清除缓存
+    if total_success > 0:
+        invalidate_cache()
 
     return {
         "success": total_success,

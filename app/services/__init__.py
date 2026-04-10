@@ -3,6 +3,7 @@ from .wordcloud_service import (
     tokenize_chinese,
     generate_wordcloud_image,
     get_word_frequencies,
+    invalidate_cache,
 )
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "tokenize_chinese",
     "generate_wordcloud_image",
     "get_word_frequencies",
+    "invalidate_cache",
 ]
