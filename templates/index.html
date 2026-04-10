@@ -7,6 +7,8 @@
     <title>碑文金石资料检索系统</title>
     <!-- Vue 3 -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -46,7 +48,7 @@
 
         <!-- Search Header -->
         <div class="flex flex-col items-center justify-center mb-10 transition-all duration-500"
-            :class="{'h-[60vh]': !hasSearched, 'h-auto': hasSearched}">
+            :class="{'h-[30vh]': !hasSearched, 'h-auto': hasSearched}">
             <h1 class="text-4xl font-bold mb-8 text-gray-800 tracking-wider">碑文金石资料检索</h1>
 
             <div class="w-full max-w-2xl relative">
@@ -70,6 +72,62 @@
                     </label>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex justify-center mb-6">
+            <div class="bg-white rounded-lg shadow-md p-1 inline-flex">
+                <button @click="activeTab = 'search'"
+                    :class="['px-6 py-2 rounded-lg font-medium transition-colors', activeTab === 'search' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100']">
+                    碑文检索
+                </button>
+                <button @click="switchToWordCloud"
+                    :class="['px-6 py-2 rounded-lg font-medium transition-colors', activeTab === 'wordcloud' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100']">
+                    词云统计
+                </button>
+                <button @click="switchToFrequencies"
+                    :class="['px-6 py-2 rounded-lg font-medium transition-colors', activeTab === 'frequencies' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100']">
+                    词频统计
+                </button>
+            </div>
+        </div>
+
+        <!-- Word Cloud Section -->
+        <div v-if="activeTab === 'wordcloud'" class="max-w-4xl mx-auto mb-8">
+            <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                <div v-if="wordcloudLoading" class="flex items-center justify-center h-96">
+                    <div class="text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                        <p class="mt-4 text-gray-600">正在生成词云...</p>
+                    </div>
+                </div>
+                <img v-else :src="wordcloudUrl" alt="词云" class="w-full rounded">
+            </div>
+        </div>
+
+        <!-- Frequency Chart Section -->
+        <div v-if="activeTab === 'frequencies'" class="max-w-4xl mx-auto mb-8">
+            <div class="bg-white rounded-lg shadow-md p-6 mb-4">
+                <!-- Era Filter -->
+                <div class="flex items-center gap-4 mb-4">
+                    <label class="font-medium">时代筛选：</label>
+                    <input v-model="eraFilter" @keyup.enter="loadFrequencies" type="text" placeholder="如：天祿、會同"
+                        class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                    <button @click="loadFrequencies"
+                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        查询
+                    </button>
+                </div>
+                <!-- Loading State -->
+                <div v-if="frequenciesLoading" class="flex items-center justify-center h-96">
+                    <div class="text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                        <p class="mt-4 text-gray-600">正在加载词频数据...</p>
+                    </div>
+                </div>
+                <!-- Chart Container -->
+                <div v-else id="frequencyChart" class="w-full" style="height: 500px;"></div>
             </div>
         </div>
 
@@ -213,7 +271,7 @@
     {% endraw %}
 
     <script>
-        const { createApp, ref } = Vue
+        const { createApp, ref, nextTick, onMounted } = Vue
 
         createApp({
             setup() {
@@ -223,6 +281,40 @@
                 const hasSearched = ref(false)
                 const selectedItem = ref(null)
                 const currentImageIndex = ref(0)
+                const activeTab = ref('search')
+                const eraFilter = ref('')
+                const wordcloudUrl = ref('')
+                const wordcloudLoading = ref(false)
+                const frequenciesLoading = ref(false)
+                const cachedFrequencies = ref(null)
+                const cachedEra = ref('')
+                let frequencyChart = null
+                let frequenciesLoaded = false
+
+                // Preload data on mount
+                onMounted(async () => {
+                    // Preload wordcloud image
+                    wordcloudLoading.value = true
+                    const img = new Image()
+                    img.onload = () => { wordcloudLoading.value = false }
+                    img.src = '/api/wordcloud'
+                    wordcloudUrl.value = img.src
+
+                    // Preload frequencies data
+                    frequenciesLoading.value = true
+                    try {
+                        const response = await fetch('/api/frequencies?top_n=30')
+                        const data = await response.json()
+                        cachedFrequencies.value = data.frequencies
+                        cachedEra.value = ''
+                        frequenciesLoaded = true
+                        // Don't render here, wait for user to switch to tab
+                    } catch (error) {
+                        console.error('Error preloading frequencies:', error)
+                    } finally {
+                        frequenciesLoading.value = false
+                    }
+                })
 
                 // Field options definition
                 const fieldOptions = [
@@ -238,6 +330,115 @@
                 ]
                 // Default selected fields
                 const selectedFields = ref(['name', 'transcript', 'discovery'])
+
+                const switchToWordCloud = () => {
+                    activeTab.value = 'wordcloud'
+                    // Use cached wordcloud, no reload needed
+                }
+
+                const switchToFrequencies = () => {
+                    activeTab.value = 'frequencies'
+                    if (frequenciesLoaded && cachedFrequencies.value) {
+                        nextTick(() => {
+                            // Reset chart instance since DOM was recreated
+                            frequencyChart = null
+                            renderFrequencyChart(cachedFrequencies.value)
+                        })
+                    } else {
+                        loadFrequencies()
+                    }
+                }
+
+                const loadFrequencies = async (forceReload = false) => {
+                    const currentEra = eraFilter.value.trim()
+
+                    // Use cache if available, era matches, and not forcing reload
+                    if (!forceReload && cachedFrequencies.value && cachedEra.value === currentEra) {
+                        nextTick(() => renderFrequencyChart(cachedFrequencies.value))
+                        return
+                    }
+
+                    frequenciesLoading.value = true
+
+                    let url = '/api/frequencies?top_n=30'
+                    if (currentEra) {
+                        url += '&era=' + encodeURIComponent(currentEra)
+                    }
+
+                    try {
+                        const response = await fetch(url)
+                        const data = await response.json()
+
+                        // Cache the data and era
+                        cachedFrequencies.value = data.frequencies
+                        cachedEra.value = currentEra
+                        frequenciesLoaded = true
+
+                        // Wait for DOM to update, then initialize chart
+                        await nextTick()
+
+                        renderFrequencyChart(data.frequencies)
+                    } catch (error) {
+                        console.error('Error loading frequencies:', error)
+                    } finally {
+                        frequenciesLoading.value = false
+                    }
+                }
+
+                const renderFrequencyChart = (frequencies) => {
+                    // Initialize or reinitialize chart (DOM may have been recreated)
+                    frequencyChart = echarts.init(document.getElementById('frequencyChart'))
+
+                    // Prepare data (reverse for horizontal bar chart)
+                    const yData = frequencies.map(f => f.word).reverse()
+                    const xData = frequencies.map(f => f.count).reverse()
+
+                    // Configure chart
+                    frequencyChart.setOption({
+                        title: {
+                            text: '词频统计 Top 30',
+                            left: 'center',
+                            textStyle: { fontSize: 18, fontWeight: 'bold' }
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: { type: 'shadow' }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '10%',
+                            bottom: '3%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'value',
+                            name: '出现次数',
+                            axisLabel: { fontSize: 12 }
+                        },
+                        yAxis: {
+                            type: 'category',
+                            data: yData,
+                            axisLabel: { fontSize: 12 },
+                            name: '词语'
+                        },
+                        series: [{
+                            name: '出现次数',
+                            type: 'bar',
+                            data: xData,
+                            itemStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                                    { offset: 0, color: '#4ade80' },
+                                    { offset: 1, color: '#3b82f6' }
+                                ])
+                            },
+                            label: {
+                                show: true,
+                                position: 'right',
+                                fontSize: 11
+                            }
+                        }]
+                    })
+                }
 
                 const performSearch = async () => {
                     if (!searchQuery.value.trim()) return
@@ -278,7 +479,16 @@
                     currentImageIndex,
                     fieldOptions,
                     selectedFields,
+                    activeTab,
+                    eraFilter,
+                    wordcloudUrl,
+                    wordcloudLoading,
+                    frequenciesLoading,
+                    cachedFrequencies,
                     performSearch,
+                    switchToWordCloud,
+                    switchToFrequencies,
+                    loadFrequencies,
                     openDetail: (item) => {
                         selectedItem.value = item
                         currentImageIndex.value = 0

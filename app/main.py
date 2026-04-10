@@ -1,16 +1,18 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Query, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional
 import json
 import os
 import shutil
+import io
 from scripts import word_parser
 
 from . import models, crud, database
+from .services import get_all_transcripts, tokenize_chinese, generate_wordcloud_image, get_word_frequencies
 
 # Create tables
 models.Base.metadata.create_all(bind=database.engine)
@@ -123,6 +125,64 @@ def delete_inscription(inscription_id: int, db: Session = Depends(get_db)):
     db.delete(db_obj)
     db.commit()
     return {"status": "success", "message": f"Inscription {inscription_id} deleted"}
+
+
+@app.get("/api/wordcloud")
+def get_wordcloud(
+    era: Optional[str] = Query(None, description="Filter by era (时代)"),
+    width: int = Query(1200, description="Image width in pixels"),
+    height: int = Query(800, description="Image height in pixels"),
+    max_words: int = Query(200, description="Maximum number of words"),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate a word cloud image from inscription transcripts.
+
+    - **era**: Optional era filter (e.g., "唐代", "宋代")
+    - **width**: Image width (default 1200)
+    - **height**: Image height (default 800)
+    - **max_words**: Maximum words to display (default 200)
+
+    Returns a PNG image.
+    """
+    transcripts = get_all_transcripts(db, era=era)
+
+    if not transcripts or not transcripts.strip():
+        from .services.wordcloud_service import _generate_empty_image
+        img_bytes = _generate_empty_image(width, height)
+    else:
+        tokenized_text = tokenize_chinese(transcripts)
+        img_bytes = generate_wordcloud_image(
+            tokenized_text,
+            width=width,
+            height=height,
+            max_words=max_words,
+        )
+
+    return StreamingResponse(
+        io.BytesIO(img_bytes),
+        media_type="image/png",
+        headers={"Content-Disposition": "inline; filename=wordcloud.png"},
+    )
+
+
+@app.get("/api/frequencies")
+def get_word_frequencies_endpoint(
+    era: Optional[str] = Query(None, description="Filter by era (时代)"),
+    top_n: int = Query(50, description="Number of top words to return"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get word frequency statistics from inscription transcripts.
+
+    - **era**: Optional era filter (e.g., "唐代", "宋代")
+    - **top_n**: Number of top words to return (default 50)
+
+    Returns JSON with word frequencies.
+    """
+    transcripts = get_all_transcripts(db, era=era)
+    frequencies = get_word_frequencies(transcripts, top_n=top_n)
+    return {"frequencies": [{"word": word, "count": count} for word, count in frequencies]}
 
 
 @app.post("/api/upload")
