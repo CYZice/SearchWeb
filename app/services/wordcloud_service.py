@@ -85,6 +85,8 @@ STOPWORDS = {
     "但", "却", "又", "就", "都", "还", "已", "曾",
     # Numbers (single digit)
     "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
+    # Time-related words
+    "年", "月", "日", "时", "时间", "五年", "四月",
     # Common inscription-specific words to filter
     "碑", "文", "字", "石", "銘", "誌", "墓",
     # Punctuation and symbols
@@ -94,6 +96,9 @@ STOPWORDS = {
     # Whitespace
     "\n", "\r", "\t", " ",
 }
+
+# Regex to match time expressions like 二年、三年、五年、四月、二日
+TIME_PATTERN = re.compile(r"^[\d一二三四五六七八九十百千]+[年月日]$")
 
 
 def get_all_transcripts(db: Session, era: Optional[str] = None) -> str:
@@ -129,13 +134,14 @@ def tokenize_chinese(text: str) -> str:
     # Clean HTML tags first
     text = clean_text(text)
     words = jieba.cut(text)
-    # Filter: not in stopwords, length > 1, not purely punctuation/digits
+    # Filter: not in stopwords, length > 1, not purely punctuation/digits, not time expressions
     filtered = [
         w
         for w in words
         if w not in STOPWORDS
         and len(w) > 1
         and not re.match(r"^[\d\s\W]+$", w)
+        and not TIME_PATTERN.match(w)
     ]
     return " ".join(filtered)
 
@@ -156,6 +162,7 @@ def get_word_frequencies(text: str, top_n: int = 50) -> List[Tuple[str, int]]:
         if w not in STOPWORDS
         and len(w) > 1
         and not re.match(r"^[\d\s\W]+$", w)
+        and not TIME_PATTERN.match(w)
     ]
     result = Counter(filtered).most_common(top_n)
 
