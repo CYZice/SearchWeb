@@ -64,15 +64,14 @@ def get_images_from_run(run, doc):
         "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
         "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
         "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+        "v": "urn:schemas-microsoft-com:vml",
     }
 
     if run.element is None:
         return images
 
-    # Find drawing elements
-    # Note: python-docx elements usually have nsmap
+    # 1. Find modern drawing elements (DrawingML)
     drawings = run.element.findall(".//w:drawing", run.element.nsmap)
-
     for drawing in drawings:
         # Find blip
         blips = drawing.findall(".//a:blip", nsmap)
@@ -84,6 +83,21 @@ def get_images_from_run(run, doc):
                     images.append(part)
                 except KeyError:
                     pass
+
+    # 2. Find older VML image elements (<w:pict>)
+    picts = run.element.findall(".//w:pict", run.element.nsmap)
+    for pict in picts:
+        imagedatas = pict.findall(".//v:imagedata", nsmap)
+        for imagedata in imagedatas:
+            # Note: v:imagedata uses r:id instead of r:embed
+            embed_id = imagedata.get(f"{{{nsmap['r']}}}id")
+            if embed_id:
+                try:
+                    part = doc.part.related_parts[embed_id]
+                    images.append(part)
+                except KeyError:
+                    pass
+
     return images
 
 

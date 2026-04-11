@@ -12,7 +12,14 @@ import io
 from scripts import word_parser
 
 from . import models, crud, database
-from .services import get_all_transcripts, tokenize_chinese, generate_wordcloud_image, get_word_frequencies, invalidate_cache
+from .services import (
+    get_all_transcripts,
+    tokenize_chinese,
+    generate_wordcloud_image,
+    get_word_frequencies,
+    get_official_titles_text,
+    get_official_titles_set,
+)
 
 # Create tables
 models.Base.metadata.create_all(bind=database.engine)
@@ -30,6 +37,17 @@ def ensure_image_column():
 ensure_image_column()
 
 app = FastAPI(title="Inscription Retrieval System")
+
+
+# Middleware to disable browser cache
+@app.middleware("http")
+async def disable_cache(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -64,11 +82,13 @@ def search(
     fields: Optional[List[str]] = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(15, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     skip = (page - 1) * size
     limit = size
-    results, total_count = crud.search_inscriptions(db, q, fields=fields, skip=skip, limit=limit)
+    results, total_count = crud.search_inscriptions(
+        db, q, fields=fields, skip=skip, limit=limit
+    )
     # Parse image_url JSON string back to list for response
     for item in results:
         if item.image_url:
@@ -76,13 +96,8 @@ def search(
                 item.image_url = json.loads(item.image_url)
             except:
                 item.image_url = []
-    
-    return {
-        "items": results,
-        "total": total_count,
-        "page": page,
-        "size": size
-    }
+
+    return {"items": results, "total": total_count, "page": page, "size": size}
 
 
 @app.get("/api/inscriptions/{inscription_id}")
@@ -130,9 +145,6 @@ def overwrite_inscription(data: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_obj)
 
-    # 数据更新后清除缓存
-    invalidate_cache()
-
     return {"status": "success", "id": db_obj.id, "name": db_obj.name}
 
 
@@ -146,9 +158,6 @@ def delete_inscription(inscription_id: int, db: Session = Depends(get_db)):
 
     db.delete(db_obj)
     db.commit()
-
-    # 数据删除后清除缓存
-    invalidate_cache()
 
     return {"status": "success", "message": f"Inscription {inscription_id} deleted"}
 
@@ -175,6 +184,7 @@ def get_wordcloud(
 
     if not transcripts or not transcripts.strip():
         from .services.wordcloud_service import _generate_empty_image
+
         img_bytes = _generate_empty_image(width, height)
     else:
         tokenized_text = tokenize_chinese(transcripts)
@@ -208,7 +218,135 @@ def get_word_frequencies_endpoint(
     """
     transcripts = get_all_transcripts(db, era=era)
     frequencies = get_word_frequencies(transcripts, top_n=top_n)
-    return {"frequencies": [{"word": word, "count": count} for word, count in frequencies]}
+    return {
+        "frequencies": [{"word": word, "count": count} for word, count in frequencies]
+    }
+
+
+@app.get("/api/frequencies/official-titles")
+def get_official_titles_frequencies(
+    era: Optional[str] = Query(None, description="Filter by era (时代)"),
+    top_n: int = Query(50, description="Number of top words to return"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get word frequency statistics from inscription transcripts for specified official titles.
+
+    - **era**: Optional era filter (e.g., "唐代", "宋代")
+    - **top_n**: Number of top words to return (default 50)
+
+    Returns JSON with word frequencies.
+    """
+    import re
+    import zhconv
+
+    # 用户指定的官称列表（简体 + 繁体版本）
+    # 格式: (显示名, [简体, 繁体, ...])
+    OFFICIAL_TITLE_PAIRS = [
+        ("處置使", ["处置使", "處置使"]),
+        ("制置使", ["制置使"]),
+        ("兵馬都總管", ["兵马都总管", "兵馬都總管"]),
+        ("點檢", ["点检", "點檢"]),
+        ("轉運使", ["转运使", "轉運使"]),
+        ("節度使", ["节度使", "節度使"]),
+        ("節度副使", ["节度副使", "節度副使"]),
+        ("行軍司馬", ["行军司马", "行軍司馬"]),
+        ("團練使", ["团练使", "團練使"]),
+        ("觀察使", ["观察使", "觀察使"]),
+        ("觀察判官", ["观察判官", "觀察判官"]),
+        ("商稅判官", ["商税判官", "商稅判官"]),
+        ("軍事判官", ["军事判官", "軍事判官"]),
+        ("留守判官", ["留守判官"]),
+        ("防禦使", ["防御使", "防禦使"]),
+        ("州刺史", ["州刺史"]),
+        ("州軍州事", ["州军州事", "州軍州事"]),
+        ("縣令", ["县令", "縣令"]),
+        ("縣丞", ["县丞", "縣丞"]),
+        ("縣主簿", ["县主簿", "縣主簿"]),
+        ("縣尉", ["县尉", "縣尉"]),
+        ("留守事", ["留守事"]),
+        ("都總管", ["都总管", "都總管"]),
+        ("都虞候", ["都虞候"]),
+        ("警巡", ["警巡"]),
+        ("博士", ["博士"]),
+        ("都部署", ["都部署"]),
+        ("檢校太子賓客", ["检校太子宾客", "檢校太子賓客", "太子宾客", "太子賓客"]),
+        ("太子太傅", ["太子太傅"]),
+        ("太子少傅", ["太子少傅"]),
+        ("太子太師", ["太子太师", "太子太師"]),
+        ("太子太保", ["太子太保"]),
+        ("太子少保", ["太子少保"]),
+        ("太子洗馬", ["太子洗马", "太子洗馬"]),
+        ("太子中舍", ["太子中舍"]),
+        ("太子中允", ["太子中允"]),
+        ("校書郎", ["校书郎", "校書郎"]),
+        ("秘書監", ["秘书监", "秘書監", "秘书少监", "秘書少監"]),
+        ("開國子", ["开国子", "開國子"]),
+        ("檢校國子祭酒", ["检校国子祭酒", "檢校國子祭酒", "国子祭酒", "國子祭酒"]),
+        ("太僕卿", ["太仆卿", "太僕卿", "太仆少卿", "太僕少卿"]),
+        ("大理寺", ["大理寺"]),
+        ("司農少卿", ["司农少卿", "司農少卿", "司农卿", "司農卿"]),
+        ("宣政殿學士", ["宣政殿学士", "宣政殿學士", "宣政殿大学士", "宣政殿大學士"]),
+        ("觀書殿學士", ["观书殿学士", "觀書殿學士"]),
+        ("昭文館直學士", ["昭文馆直学士", "昭文館直學士"]),
+        ("乾文閣待制", ["乾文阁待制", "乾文閣待制"]),
+        ("乾文閣待制直學士", ["乾文阁待制直学士", "乾文閣待制直學士"]),
+        ("翰林學士", ["翰林学士", "翰林學士"]),
+        ("宣徽使", ["宣徽使"]),
+        ("知内承宣事", ["知内承宣事"]),
+        ("尚書令", ["尚书令", "尚書令"]),
+        ("左僕射", ["左仆射", "左僕射"]),
+        ("右僕射", ["右仆射", "右僕射"]),
+        ("参知政事", ["参知政事"]),
+        ("禮部尚書", ["礼部尚书", "禮部尚書"]),
+        ("吏部尚書", ["吏部尚书", "吏部尚書"]),
+        ("兵部尚書", ["兵部尚书", "兵部尚書"]),
+        ("刑部尚書", ["刑部尚书", "刑部尚書"]),
+        ("工部尚書", ["工部尚书", "工部尚書"]),
+        ("監察御史", ["监察御史", "監察御史"]),
+        ("御史大夫", ["御史大夫"]),
+        ("御史中丞", ["御史中丞"]),
+        ("殿中侍御史", ["殿中侍御史"]),
+        ("殿中丞", ["殿中丞"]),
+        ("殿中監", ["殿中监", "殿中監", "殿中少监", "殿中少監"]),
+        ("檢校太師", ["检校太师", "檢校太師"]),
+        ("檢校太保", ["检校太保", "檢校太保"]),
+        ("檢校太傅", ["检校太傅", "檢校太傅"]),
+        ("檢校太尉", ["检校太尉", "檢校太尉"]),
+        ("檢校司徒", ["检校司徒", "檢校司徒"]),
+        ("檢校司空", ["检校司空", "檢校司空"]),
+        ("中書令", ["中书令", "中書令"]),
+        ("大丞相", ["大丞相"]),
+        ("左丞相", ["左丞相"]),
+        ("中書侍郎", ["中书侍郎", "中書侍郎"]),
+        ("中書省事", ["中书省事", "中書省事"]),
+        ("中書門下平章事", ["中书门下平章事", "中書門下平章事"]),
+        ("門下侍郎", ["门下侍郎", "門下侍郎"]),
+        ("銀青崇禄大夫", ["银青崇禄大夫", "銀青崇禄大夫"]),
+        ("紫崇禄大夫", ["紫崇禄大夫"]),
+    ]
+
+    # 获取碑文文本
+    transcripts = get_all_transcripts(db, era=era)
+    if not transcripts:
+        return {"frequencies": []}
+
+    # 清理文本
+    text = re.sub(r"<[^>]+>", "", transcripts)
+    text = re.sub(r"\s+", " ", text)
+
+    # 统计词语出现次数
+    title_counts = {}
+    for display_name, variants in OFFICIAL_TITLE_PAIRS:
+        total_count = sum(len(re.findall(re.escape(v), text)) for v in variants)
+        if total_count > 0:
+            title_counts[display_name] = total_count
+
+    # 按出现次数排序
+    frequencies = sorted(title_counts.items(), key=lambda x: -x[1])[:top_n]
+    return {
+        "frequencies": [{"word": word, "count": count} for word, count in frequencies]
+    }
 
 
 @app.post("/api/upload")
@@ -259,10 +397,6 @@ async def upload_files(
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-
-    # 数据更新后清除缓存
-    if total_success > 0:
-        invalidate_cache()
 
     return {
         "success": total_success,

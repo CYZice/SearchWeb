@@ -421,6 +421,25 @@
             margin-bottom: 1.5rem;
         }
 
+        /* 数据源切换标签 */
+        .datasource-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            border: 1px solid var(--paper-dark);
+            background: var(--paper-old);
+            color: var(--ink-gray);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .datasource-tag.selected {
+            background: var(--stone-green);
+            color: white;
+            border-color: var(--stone-green);
+        }
+
         /* 加载动画 - 印章旋转 */
         .seal-loader {
             width: 48px;
@@ -558,9 +577,19 @@
                     {{ activeTab === 'wordcloud' ? '词云统计' : '词频分析' }}
                 </h3>
                 <div class="flex items-center gap-3" v-if="activeTab === 'frequencies'">
-                    <span class="text-sm text-[var(--ink-gray)]">时代筛选：</span>
+                    <!-- 数据源切换 -->
+                    <span class="text-sm text-[var(--ink-gray)]">数据源：</span>
+                    <span class="datasource-tag" :class="{ selected: frequencySource === 'inscriptions' }"
+                        @click="switchFrequencySource('inscriptions')">
+                        碑文词频
+                    </span>
+                    <span class="datasource-tag" :class="{ selected: frequencySource === 'official-titles' }"
+                        @click="switchFrequencySource('official-titles')">
+                        官称词频
+                    </span>
+                    <span class="text-sm text-[var(--ink-gray)] ml-4" v-if="frequencySource === 'inscriptions'">时代筛选：</span>
                     <input v-model="eraFilter" @keyup.enter="loadFrequencies" type="text" class="era-input"
-                        placeholder="如：唐代">
+                        placeholder="如：唐代" v-if="frequencySource === 'inscriptions'">
                     <button @click="loadFrequencies" class="btn-seal text-xs">查询</button>
                 </div>
             </div>
@@ -758,13 +787,11 @@
                 const currentImageIndex = ref(0)
                 const activeTab = ref('search')
                 const eraFilter = ref('')
+                const frequencySource = ref('inscriptions')  // 'inscriptions' or 'official-titles'
                 const wordcloudUrl = ref('')
                 const wordcloudLoading = ref(false)
                 const frequenciesLoading = ref(false)
-                const cachedFrequencies = ref(null)
-                const cachedEra = ref('')
                 let frequencyChart = null
-                let frequenciesLoaded = false
 
                 onMounted(async () => {
                     // 预加载词云
@@ -773,20 +800,6 @@
                     img.onload = () => { wordcloudLoading.value = false }
                     img.src = '/api/wordcloud'
                     wordcloudUrl.value = img.src
-
-                    // 预加载词频
-                    frequenciesLoading.value = true
-                    try {
-                        const response = await fetch('/api/frequencies?top_n=30')
-                        const data = await response.json()
-                        cachedFrequencies.value = data.frequencies
-                        cachedEra.value = ''
-                        frequenciesLoaded = true
-                    } catch (error) {
-                        console.error('Error preloading frequencies:', error)
-                    } finally {
-                        frequenciesLoading.value = false
-                    }
                 })
 
                 const fieldOptions = [
@@ -817,23 +830,34 @@
 
                 const switchToFrequencies = () => {
                     activeTab.value = 'frequencies'
-                    if (frequenciesLoaded && cachedFrequencies.value) {
-                        nextTick(() => {
-                            frequencyChart = null
-                            renderFrequencyChart(cachedFrequencies.value)
-                        })
-                    } else {
-                        loadFrequencies()
-                    }
+                    loadFrequencies()
                 }
 
-                const loadFrequencies = async (forceReload = false) => {
+                const switchFrequencySource = (source) => {
+                    frequencySource.value = source
+                    loadFrequencies()
+                }
+
+                const loadFrequencies = async () => {
                     const currentEra = eraFilter.value.trim()
-                    if (!forceReload && cachedFrequencies.value && cachedEra.value === currentEra) {
-                        nextTick(() => renderFrequencyChart(cachedFrequencies.value))
+
+                    // 官称词频
+                    if (frequencySource.value === 'official-titles') {
+                        frequenciesLoading.value = true
+                        try {
+                            const response = await fetch('/api/frequencies/official-titles?top_n=30')
+                            const data = await response.json()
+                            await nextTick()
+                            setTimeout(() => renderFrequencyChart(data.frequencies, '官称词频 Top 30'), 50)
+                        } catch (error) {
+                            console.error('Error loading official titles frequencies:', error)
+                        } finally {
+                            frequenciesLoading.value = false
+                        }
                         return
                     }
 
+                    // 碑文词频
                     frequenciesLoading.value = true
                     let url = '/api/frequencies?top_n=30'
                     if (currentEra) {
@@ -843,11 +867,8 @@
                     try {
                         const response = await fetch(url)
                         const data = await response.json()
-                        cachedFrequencies.value = data.frequencies
-                        cachedEra.value = currentEra
-                        frequenciesLoaded = true
                         await nextTick()
-                        renderFrequencyChart(data.frequencies)
+                        setTimeout(() => renderFrequencyChart(data.frequencies), 50)
                     } catch (error) {
                         console.error('Error loading frequencies:', error)
                     } finally {
@@ -855,14 +876,24 @@
                     }
                 }
 
-                const renderFrequencyChart = (frequencies) => {
-                    frequencyChart = echarts.init(document.getElementById('frequencyChart'))
+                const renderFrequencyChart = (frequencies, title = '词频统计 Top 30') => {
+                    // 销毁旧图表实例避免内存泄漏
+                    if (frequencyChart) {
+                        frequencyChart.dispose()
+                        frequencyChart = null
+                    }
+                    const chartDom = document.getElementById('frequencyChart')
+                    if (!chartDom) {
+                        console.error('frequencyChart DOM not found')
+                        return
+                    }
+                    frequencyChart = echarts.init(chartDom)
                     const yData = frequencies.map(f => f.word).reverse()
                     const xData = frequencies.map(f => f.count).reverse()
 
                     frequencyChart.setOption({
                         title: {
-                            text: '词频统计 Top 30',
+                            text: title,
                             left: 'center',
                             textStyle: {
                                 fontSize: 16,
@@ -955,6 +986,7 @@
                     selectedFields,
                     activeTab,
                     eraFilter,
+                    frequencySource,
                     wordcloudUrl,
                     wordcloudLoading,
                     frequenciesLoading,
@@ -962,6 +994,7 @@
                     performSearch,
                     switchToWordCloud,
                     switchToFrequencies,
+                    switchFrequencySource,
                     loadFrequencies,
                     openDetail: (item) => {
                         selectedItem.value = item
