@@ -171,31 +171,44 @@ def get_all_eras(db: Session):
     import re
     inscriptions = db.query(models.Inscription.era).all()
     eras = set()
-    chinese_numerals = '一二三四五六七八九十'
+    chinese_numerals = '一二三四五六七八九十百'
+
     for (era,) in inscriptions:
         if era:
             # 去掉括号内容（公元xxx年）
             era_clean = re.sub(r'[（(][^）)]*[）)]', '', era)
-            # 年号提取：从末尾向前扫描，直到找到"年/月/間"或中文数字
-            # 停止在年号与年份数字的分界处
-            end_pos = len(era_clean)
+
+            # 特殊处理"月間"（时期）
+            if era_clean.endswith('間') and not era_clean.endswith('月間'):
+                # 如"保寧間" - "間"是时代名称的一部分
+                eras.add(era_clean)
+                continue
+
+            # 找到年/月标记（不包含"年前"）
+            last_marker_pos = -1
             for i in range(len(era_clean) - 1, -1, -1):
                 c = era_clean[i]
-                if c in ('年', '月', '間'):
-                    # 找到年份标记，设置结束位置，继续检查是否还有数字
-                    end_pos = i
-                elif c in chinese_numerals and end_pos <= i + 1:
-                    # 继续包含前面的中文数字
-                    end_pos = i
-                elif c == '元':
-                    # "元"表示元年，跳过不包含
-                    end_pos = i
-                else:
-                    # 遇到非数字字符，停止
+                if c in ('年', '月') and not (i > 0 and era_clean[i-1] == '前'):
+                    last_marker_pos = i
                     break
-            era_name = era_clean[:end_pos].strip()
+
+            if last_marker_pos == -1:
+                if era_clean.strip():
+                    eras.add(era_clean.strip())
+                continue
+
+            # 找到标记，往回找到数字部分开始的位置
+            j = last_marker_pos - 1
+            while j >= 0 and era_clean[j] in chinese_numerals:
+                j -= 1
+            # 跳过"元"（元年）
+            if j >= 0 and era_clean[j] == '元':
+                j -= 1
+
+            era_name = era_clean[:j+1].strip()
             if era_name:
                 eras.add(era_name)
+
     return sorted(list(eras))
 
 
