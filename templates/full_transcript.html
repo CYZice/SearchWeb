@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>誌文 - 墓志检索数据库</title>
+    <!-- Google Fonts - Noto Serif SC -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=ZCOOL+XiaoWei&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --paper-white: #F5F0E6;
+            --paper-old: #E8DFD0;
+            --paper-dark: #D4C4A8;
+            --ink-black: #2C2C2C;
+            --ink-gray: #4A4A4A;
+            --vermilion: #C73E3A;
+            --vermilion-dark: #A62E2A;
+            --stone-green: #4A7C59;
+            --藏青: #1E3A5F;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--paper-white);
+            font-family: 'Noto Serif SC', 'STKaiti', 'KaiTi', serif;
+            color: var(--ink-black);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--paper-dark);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: var(--藏青);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .back-link:hover {
+            color: var(--vermilion);
+        }
+
+        .inscription-title {
+            font-family: 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
+            font-size: 2rem;
+            color: var(--藏青);
+            margin: 0.5rem 0;
+        }
+
+        .inscription-meta {
+            font-size: 0.9rem;
+            color: var(--ink-gray);
+            margin-top: 0.5rem;
+        }
+
+        .inscription-meta span {
+            margin: 0 0.5rem;
+        }
+
+        /* 志文竖排展示 */
+        .transcript-container {
+            display: flex;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .transcript-panel {
+            flex: 2;
+            background: linear-gradient(145deg, #FFFEF9 0%, var(--paper-old) 100%);
+            border: 1px solid var(--paper-dark);
+            padding: 2rem;
+            min-height: 70vh;
+        }
+
+        .transcript-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--vermilion);
+            margin-bottom: 1rem;
+            padding-left: 0.5rem;
+            border-left: 3px solid var(--vermilion);
+        }
+
+        .transcript-content {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            height: 65vh;
+            line-height: 2.5rem;
+            font-size: 1.3rem;
+            letter-spacing: 0.1em;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'STKaiti', 'KaiTi', serif;
+        }
+
+        .image-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .image-panel img {
+            max-width: 100%;
+            border: 1px solid var(--paper-dark);
+            cursor: zoom-in;
+        }
+
+        .no-image {
+            color: var(--ink-gray);
+            text-align: center;
+            padding: 2rem;
+            background: var(--paper-old);
+            border: 1px solid var(--paper-dark);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 4rem;
+            color: var(--ink-gray);
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--paper-dark);
+            font-size: 0.8rem;
+            color: var(--ink-gray);
+        }
+
+        @media (max-width: 768px) {
+            .transcript-container {
+                flex-direction: column;
+            }
+
+            .transcript-content {
+                height: auto;
+                min-height: 50vh;
+                writing-mode: horizontal-tb;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    {% raw %}
+    <div id="app" class="container">
+        <div v-if="loading" class="loading">
+            <p>正在加载...</p>
+        </div>
+
+        <div v-else-if="inscription">
+            <div class="header">
+                <a href="javascript:window.close();" class="back-link">← 关闭</a>
+                <h1 class="inscription-title">{{ inscription.name }}</h1>
+                <div class="inscription-meta">
+                    <span v-if="inscription.serial_num">{{ inscription.serial_num }}</span>
+                    <span v-if="inscription.era">{{ inscription.era }}</span>
+                    <span v-if="inscription.format">{{ inscription.format }}</span>
+                </div>
+            </div>
+
+            <div class="transcript-container">
+                <div class="transcript-panel">
+                    <div class="transcript-title">誌文</div>
+                    <div class="transcript-content" v-html="inscription.transcript || '暂无誌文'"></div>
+                </div>
+
+                <div class="image-panel">
+                    <div v-if="inscription.image_url && inscription.image_url.length > 0">
+                        <img v-for="(img, idx) in inscription.image_url" :key="idx"
+                            :src="img" @click="window.open(img, '_blank')" :alt="'图片' + (idx + 1)">
+                    </div>
+                    <div v-else class="no-image">暂无图片</div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>© 2026 墓志检索数据库</p>
+            </div>
+        </div>
+
+        <div v-else class="loading">
+            <p>未找到该墓志</p>
+        </div>
+    </div>
+    {% endraw %}
+
+    <script>
+        const { createApp, ref, onMounted } = Vue
+
+        createApp({
+            setup() {
+                const inscription = ref(null)
+                const loading = ref(true)
+
+                onMounted(async () => {
+                    const urlParams = new URLSearchParams(window.location.search)
+                    const id = urlParams.get('id')
+
+                    if (id) {
+                        try {
+                            const response = await fetch(`/api/inscriptions/${id}`)
+                            if (response.ok) {
+                                const data = await response.json()
+                                inscription.value = data
+                                // Parse image_url if it's a JSON string
+                                if (data.image_url && typeof data.image_url === 'string') {
+                                    try {
+                                        inscription.value.image_url = JSON.parse(data.image_url)
+                                    } catch {
+                                        inscription.value.image_url = []
+                                    }
+                                }
+                                // Update page title
+                                document.title = `${data.name} - 誌文 - 墓志检索数据库`
+                            }
+                        } catch (error) {
+                            console.error('Error loading inscription:', error)
+                        }
+                    }
+                    loading.value = false
+                })
+
+                return {
+                    inscription,
+                    loading
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+
+</html>

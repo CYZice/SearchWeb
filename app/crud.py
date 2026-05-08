@@ -118,3 +118,91 @@ def create_inscription(db: Session, inscription_data: dict):
     db.commit()
     db.refresh(db_item)
     return db_item
+
+
+def get_timeline_data(db: Session, sample_size: int = 5):
+    """Get inscriptions grouped by era for timeline view."""
+    # Query all inscriptions grouped by era
+    inscriptions = db.query(
+        models.Inscription.era,
+        models.Inscription.id,
+        models.Inscription.name,
+        models.Inscription.serial_num
+    ).order_by(models.Inscription.era).all()
+
+    # Group by era
+    era_groups = {}
+    for era, ins_id, name, serial_num in inscriptions:
+        if era not in era_groups:
+            era_groups[era] = {"name": era, "count": 0, "samples": []}
+        era_groups[era]["count"] += 1
+        if len(era_groups[era]["samples"]) < sample_size:
+            era_groups[era]["samples"].append({
+                "id": ins_id,
+                "name": name,
+                "serial_num": serial_num
+            })
+
+    timeline_data = list(era_groups.values())
+
+    # Historical era ordering
+    ERA_ORDER = {
+        "唐代": 0, "五代": 1, "五代十國": 1,
+        "宋代": 10, "北宋": 11, "南宋": 12,
+        "辽代": 20, "早期": 21,
+        "天復": 30, "天赞": 31, "天顯": 32, "會同": 33, "天祿": 34,
+        "景宗": 35, "乾亨": 36, "應曆": 37, "保寧": 38, "統和": 39,
+        "開泰": 40, "太平": 41, "大康": 42, "大安": 43, "壽昌": 44,
+        "乾統": 45, "天慶": 46, "天輔": 47,
+        "金代": 50, "金": 51,
+        "元代": 60, "元": 61,
+        "明代": 70, "明": 71,
+        "清代": 80, "清": 81,
+    }
+
+    def get_era_order(era_name):
+        return ERA_ORDER.get(era_name, 100)
+
+    return sorted(timeline_data, key=lambda x: get_era_order(x["name"]))
+
+
+def get_all_eras(db: Session):
+    """获取所有不重复的年号列表"""
+    import re
+    inscriptions = db.query(models.Inscription.era).all()
+    eras = set()
+    chinese_numerals = '一二三四五六七八九十'
+    for (era,) in inscriptions:
+        if era:
+            # 去掉括号内容（公元xxx年）
+            era_clean = re.sub(r'[（(][^）)]*[）)]', '', era)
+            # 年号提取：从末尾向前扫描，直到找到"年/月/間"或中文数字
+            # 停止在年号与年份数字的分界处
+            end_pos = len(era_clean)
+            for i in range(len(era_clean) - 1, -1, -1):
+                c = era_clean[i]
+                if c in ('年', '月', '間'):
+                    # 找到年份标记，设置结束位置，继续检查是否还有数字
+                    end_pos = i
+                elif c in chinese_numerals and end_pos <= i + 1:
+                    # 继续包含前面的中文数字
+                    end_pos = i
+                elif c == '元':
+                    # "元"表示元年，跳过不包含
+                    end_pos = i
+                else:
+                    # 遇到非数字字符，停止
+                    break
+            era_name = era_clean[:end_pos].strip()
+            if era_name:
+                eras.add(era_name)
+    return sorted(list(eras))
+
+
+def get_inscriptions_by_era(db: Session, era_name: str):
+    """按年号名称筛选墓志"""
+    # 使用模糊匹配，支持如"乾亨"、"乾統"等年号
+    inscriptions = db.query(models.Inscription).filter(
+        models.Inscription.era.like(f'%{era_name}%')
+    ).all()
+    return inscriptions

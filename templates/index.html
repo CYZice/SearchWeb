@@ -546,8 +546,12 @@
                 <!-- 视图切换 -->
                 <div class="view-toggle flex items-center">
                     <button @click="activeTab = 'search'" class="view-toggle-btn"
-                        :class="{ active: activeTab === 'search' }" title="碑文检索">
+                        :class="{ active: activeTab === 'search' }" title="墓志检索">
                         📜
+                    </button>
+                    <button @click="switchToTimeline" class="view-toggle-btn"
+                        :class="{ active: activeTab === 'timeline' }" title="时代时间轴">
+                        📅
                     </button>
                     <button @click="switchToWordCloud" class="view-toggle-btn"
                         :class="{ active: activeTab === 'wordcloud' }" title="词云统计">
@@ -587,7 +591,8 @@
                         @click="switchFrequencySource('official-titles')">
                         官称词频
                     </span>
-                    <span class="text-sm text-[var(--ink-gray)] ml-4" v-if="frequencySource === 'inscriptions'">时代筛选：</span>
+                    <span class="text-sm text-[var(--ink-gray)] ml-4"
+                        v-if="frequencySource === 'inscriptions'">时代筛选：</span>
                     <input v-model="eraFilter" @keyup.enter="loadFrequencies" type="text" class="era-input"
                         placeholder="如：唐代" v-if="frequencySource === 'inscriptions'">
                     <button @click="loadFrequencies" class="btn-seal text-xs">查询</button>
@@ -609,7 +614,73 @@
                     <div class="seal-loader mx-auto"></div>
                     <p class="mt-4 text-[var(--ink-gray)]">正在加载数据...</p>
                 </div>
-                <div v-else id="frequencyChart" style="height: 400px;"></div>
+                <div v-else>
+                    <!-- 官称词频：双图表并列 -->
+                    <div v-if="frequencySource === 'official-titles'" class="flex gap-4">
+                        <div class="flex-1">
+                            <h4 class="text-center text-sm font-semibold mb-2 text-[var(--ink-gray)]">南面官</h4>
+                            <div id="frequencyChartSouth" style="height: 400px;"></div>
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-center text-sm font-semibold mb-2 text-[var(--ink-gray)]">北面官</h4>
+                            <div id="frequencyChartNorth" style="height: 400px;"></div>
+                        </div>
+                    </div>
+                    <!-- 碑文词频：单图表 -->
+                    <div v-else id="frequencyChart" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 时间轴视图 -->
+        <div v-if="activeTab === 'timeline'" class="mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-[var(--ink-black)]">时代时间轴</h3>
+                <div class="flex items-center gap-3">
+                    <select v-model="selectedEra" @change="filterByEra" class="era-input" style="width: 150px;">
+                        <option value="">全部年号</option>
+                        <option v-for="era in allEras" :key="era" :value="era">{{ era }}</option>
+                    </select>
+                    <span class="text-sm text-[var(--ink-gray)]">共 {{ filteredTimelineEras.length }} 个时代</span>
+                </div>
+            </div>
+
+            <div v-if="timelineLoading" class="py-20 text-center">
+                <div class="seal-loader mx-auto"></div>
+                <p class="mt-4 text-[var(--ink-gray)]">正在加载...</p>
+            </div>
+
+            <div v-else class="space-y-2">
+                <div v-for="era in filteredTimelineEras" :key="era.name"
+                    class="border border-[var(--paper-dark)] rounded">
+                    <!-- Era Header (clickable to expand) -->
+                    <div @click="toggleEra(era.name)"
+                        class="flex justify-between items-center p-4 cursor-pointer hover:bg-[var(--paper-old)] transition-colors">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl">{{ expandedEras[era.name] ? '📂' : '📁' }}</span>
+                            <h4 class="text-lg font-semibold text-[var(--藏青)]">{{ era.name }}</h4>
+                            <span class="text-sm px-2 py-0.5 bg-[var(--paper-dark)] rounded-full">
+                                {{ era.count }} 条
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Expandable Inscription List -->
+                    <div v-if="expandedEras[era.name]" class="border-t border-[var(--paper-dark)]">
+                        <div v-for="item in era.samples" :key="item.id"
+                            class="flex items-center gap-3 p-3 pl-12 hover:bg-[var(--paper-white)] cursor-pointer transition-colors"
+                            @click="openDetailFromTimeline(item)">
+                            <span class="text-xs text-[var(--ink-gray)]" style="font-family: monospace;">
+                                {{ item.serial_num }}
+                            </span>
+                            <span class="text-[var(--stone-green)]">{{ item.name }}</span>
+                        </div>
+                        <div v-if="era.count > era.samples.length"
+                            class="p-2 pl-12 text-sm text-[var(--ink-gray)] text-center">
+                            ... 还有 {{ era.count - era.samples.length }} 条
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -617,7 +688,7 @@
         <div v-if="hasSearched && !loading" class="mb-8">
             <div class="flex justify-between items-center mb-4">
                 <p class="text-[var(--ink-gray)]">
-                    找到 <span class="text-[var(--vermilion)] font-semibold">{{ results.length }}</span> 条结果
+                    找到 <span class="text-[var(--vermilion)] font-semibold">{{ totalResults }}</span> 条结果
                 </p>
                 <button @click="activeTab = 'search'" class="btn-seal text-xs" v-if="activeTab !== 'search'">
                     ← 返回检索视图
@@ -626,7 +697,7 @@
 
             <div v-if="results.length === 0"
                 class="text-center py-16 bg-[var(--paper-old)] border border-[var(--paper-dark)]">
-                <p class="text-[var(--ink-gray)] text-lg">未找到相关碑文资料</p>
+                <p class="text-[var(--ink-gray)] text-lg">未找到相关墓志资料</p>
                 <p class="text-sm text-[var(--ink-gray)] mt-2 opacity-70">请尝试其他关键词或调整检索范围</p>
             </div>
 
@@ -729,8 +800,10 @@
 
                         <div class="mt-6">
                             <h4
-                                class="text-sm font-semibold text-[var(--vermilion)] mb-2 border-l-2 border-[var(--vermilion)] pl-2">
-                                誌文</h4>
+                                class="text-sm font-semibold text-[var(--vermilion)] mb-2 border-l-2 border-[var(--vermilion)] pl-2 flex justify-between items-center">
+                                <span>誌文</span>
+                                <span @click="openTranscriptInNewTab(selectedItem.id)" class="text-xs text-[var(--ink-gray)] cursor-pointer hover:text-[var(--vermilion)]">新窗口打开 ↗</span>
+                            </h4>
                             <div class="bg-[var(--paper-white)] p-4 border border-[var(--paper-dark)] font-serif leading-relaxed text-lg"
                                 style="font-family: 'STKaiti', 'KaiTi', serif; white-space: pre-wrap;"
                                 v-html="selectedItem.transcript || '暂无誌文'">
@@ -783,6 +856,10 @@
                 const results = ref([])
                 const loading = ref(false)
                 const hasSearched = ref(false)
+                const currentPage = ref(1)
+                const totalResults = ref(0)
+                const totalPages = ref(0)
+                const pageSize = 15
                 const selectedItem = ref(null)
                 const currentImageIndex = ref(0)
                 const activeTab = ref('search')
@@ -791,7 +868,12 @@
                 const wordcloudUrl = ref('')
                 const wordcloudLoading = ref(false)
                 const frequenciesLoading = ref(false)
-                let frequencyChart = null
+                const timelineEras = ref([])
+                const timelineLoading = ref(false)
+                const expandedEras = ref({})
+                const allEras = ref([])
+                const selectedEra = ref('')
+                let frequencyCharts = {}
 
                 onMounted(async () => {
                     // 预加载词云
@@ -833,6 +915,60 @@
                     loadFrequencies()
                 }
 
+                const switchToTimeline = () => {
+                    activeTab.value = 'timeline'
+                    if (timelineEras.value.length === 0) {
+                        loadTimeline()
+                    }
+                }
+
+                const loadTimeline = async () => {
+                    timelineLoading.value = true
+                    try {
+                        const [timelineRes, erasRes] = await Promise.all([
+                            fetch('/api/timeline'),
+                            fetch('/api/eras')
+                        ])
+                        const timelineData = await timelineRes.json()
+                        const erasData = await erasRes.json()
+                        timelineEras.value = timelineData.eras || []
+                        allEras.value = erasData.eras || []
+                        // Expand first era by default
+                        if (timelineData.eras && timelineData.eras.length > 0) {
+                            expandedEras.value[timelineData.eras[0].name] = true
+                        }
+                    } catch (error) {
+                        console.error('Error loading timeline:', error)
+                    } finally {
+                        timelineLoading.value = false
+                    }
+                }
+
+                const filteredTimelineEras = () => {
+                    if (!selectedEra.value) {
+                        return timelineEras.value
+                    }
+                    return timelineEras.value.filter(era => era.name.includes(selectedEra.value))
+                }
+
+                const filterByEra = () => {
+                    // Reset expanded states
+                    expandedEras.value = {}
+                    // Expand first matching era if any
+                    const filtered = filteredTimelineEras()
+                    if (filtered.length > 0) {
+                        expandedEras.value[filtered[0].name] = true
+                    }
+                }
+
+                const toggleEra = (eraName) => {
+                    expandedEras.value[eraName] = !expandedEras.value[eraName]
+                }
+
+                const openTranscriptInNewTab = (id) => {
+                    window.open(`/full_transcript?id=${id}`, '_blank')
+                }
+
                 const switchFrequencySource = (source) => {
                     frequencySource.value = source
                     loadFrequencies()
@@ -841,14 +977,20 @@
                 const loadFrequencies = async () => {
                     const currentEra = eraFilter.value.trim()
 
-                    // 官称词频
+                    // 官称词频 - 同时获取南面官和北面官
                     if (frequencySource.value === 'official-titles') {
                         frequenciesLoading.value = true
                         try {
-                            const response = await fetch('/api/frequencies/official-titles?top_n=30')
-                            const data = await response.json()
+                            const [southRes, northRes] = await Promise.all([
+                                fetch('/api/frequencies/official-titles?top_n=15&type=south'),
+                                fetch('/api/frequencies/official-titles?top_n=15&type=north')
+                            ])
+                            const [southData, northData] = await Promise.all([southRes.json(), northRes.json()])
                             await nextTick()
-                            setTimeout(() => renderFrequencyChart(data.frequencies, '官称词频 Top 30'), 50)
+                            setTimeout(() => {
+                                renderFrequencyChart(southData.frequencies, '南面官 Top 15', 'frequencyChartSouth')
+                                renderFrequencyChart(northData.frequencies, '北面官 Top 15', 'frequencyChartNorth')
+                            }, 300)
                         } catch (error) {
                             console.error('Error loading official titles frequencies:', error)
                         } finally {
@@ -859,7 +1001,7 @@
 
                     // 碑文词频
                     frequenciesLoading.value = true
-                    let url = '/api/frequencies?top_n=30'
+                    let url = '/api/frequencies?top_n=15'
                     if (currentEra) {
                         url += '&era=' + encodeURIComponent(currentEra)
                     }
@@ -876,22 +1018,28 @@
                     }
                 }
 
-                const renderFrequencyChart = (frequencies, title = '词频统计 Top 30') => {
+                const renderFrequencyChart = (frequencies, title = '词频统计 Top 15', domId = 'frequencyChart') => {
                     // 销毁旧图表实例避免内存泄漏
-                    if (frequencyChart) {
-                        frequencyChart.dispose()
-                        frequencyChart = null
+                    if (frequencyCharts[domId]) {
+                        frequencyCharts[domId].dispose()
+                        delete frequencyCharts[domId]
                     }
-                    const chartDom = document.getElementById('frequencyChart')
+                    const chartDom = document.getElementById(domId)
                     if (!chartDom) {
-                        console.error('frequencyChart DOM not found')
+                        console.error(domId + ' DOM not found')
                         return
                     }
-                    frequencyChart = echarts.init(chartDom)
                     const yData = frequencies.map(f => f.word).reverse()
                     const xData = frequencies.map(f => f.count).reverse()
 
-                    frequencyChart.setOption({
+                    // 类目越多时提升容器高度，避免固定柱宽导致挤压重叠
+                    const minHeight = 400
+                    const rowHeight = 28
+                    chartDom.style.height = `${Math.max(minHeight, yData.length * rowHeight)}px`
+
+                    frequencyCharts[domId] = echarts.init(chartDom)
+
+                    frequencyCharts[domId].setOption({
                         title: {
                             text: title,
                             left: 'center',
@@ -907,8 +1055,8 @@
                             axisPointer: { type: 'shadow' }
                         },
                         grid: {
-                            left: '3%',
-                            right: '10%',
+                            left: 140,
+                            right: 80,
                             bottom: '3%',
                             containLabel: true
                         },
@@ -920,13 +1068,22 @@
                         yAxis: {
                             type: 'category',
                             data: yData,
-                            axisLabel: { fontSize: 11, fontFamily: 'Noto Serif SC' },
+                            axisLabel: {
+                                fontSize: 14,
+                                fontWeight: 600,
+                                color: '#2C2C2C',
+                                fontFamily: 'Noto Serif SC'
+                            },
                             name: '词语'
                         },
                         series: [{
                             name: '出现次数',
                             type: 'bar',
                             data: xData,
+                            barWidth: 10,
+                            barMaxWidth: 10,
+                            barMinHeight: 2,
+                            barCategoryGap: '55%',
                             itemStyle: {
                                 color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
                                     { offset: 0, color: '#4A7C59' },
@@ -936,31 +1093,37 @@
                             label: {
                                 show: true,
                                 position: 'right',
-                                fontSize: 10,
+                                fontSize: 13,
+                                fontWeight: 'bold',
+                                color: '#000000',
                                 fontFamily: 'Noto Serif SC'
                             }
                         }]
                     })
                 }
 
-                const performSearch = async () => {
+                const performSearch = async (page = 1) => {
+                    const targetPage = Number.isInteger(page) && page > 0 ? page : 1
                     if (!searchQuery.value.trim()) return
                     loading.value = true
                     hasSearched.value = true
                     results.value = []
-                    currentPage.value = page
+                    currentPage.value = targetPage
 
                     try {
                         const params = new URLSearchParams()
                         params.append('q', searchQuery.value)
+                        params.append('page', String(targetPage))
+                        params.append('size', String(pageSize))
                         selectedFields.value.forEach(field => {
                             params.append('fields', field)
                         })
                         const response = await fetch(`/api/search?${params.toString()}`)
                         if (!response.ok) throw new Error('Network response was not ok')
                         const data = await response.json()
-                        results.value = data.items
-                        totalResults.value = data.total
+                        results.value = data.items || []
+                        totalResults.value = data.total || 0
+                        totalPages.value = Math.ceil(totalResults.value / pageSize)
                     } catch (error) {
                         console.error('Error fetching search results:', error)
                     } finally {
@@ -980,6 +1143,9 @@
                     results,
                     loading,
                     hasSearched,
+                    currentPage,
+                    totalResults,
+                    totalPages,
                     selectedItem,
                     currentImageIndex,
                     fieldOptions,
@@ -990,16 +1156,38 @@
                     wordcloudUrl,
                     wordcloudLoading,
                     frequenciesLoading,
+                    timelineEras,
+                    timelineLoading,
+                    expandedEras,
                     toggleField,
                     performSearch,
+                    goToPage,
                     switchToWordCloud,
                     switchToFrequencies,
+                    switchToTimeline,
                     switchFrequencySource,
                     loadFrequencies,
+                    loadTimeline,
+                    toggleEra,
+                    filterByEra,
+                    filteredTimelineEras,
+                    allEras,
+                    selectedEra,
+                    openTranscriptInNewTab,
                     openDetail: (item) => {
                         selectedItem.value = item
                         currentImageIndex.value = 0
                         document.body.style.overflow = 'hidden'
+                    },
+                    openDetailFromTimeline: async (item) => {
+                        try {
+                            const response = await fetch(`/api/inscriptions/${item.id}`)
+                            selectedItem.value = await response.json()
+                            currentImageIndex.value = 0
+                            document.body.style.overflow = 'hidden'
+                        } catch (error) {
+                            console.error('Error fetching inscription:', error)
+                        }
                     },
                     closeDetail: () => {
                         selectedItem.value = null

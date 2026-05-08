@@ -76,6 +76,12 @@ async def preview_new_design(request: Request):
     return templates.TemplateResponse("index_new.html", {"request": request})
 
 
+@app.get("/full_transcript", response_class=HTMLResponse)
+async def full_transcript(request: Request):
+    """志文全屏展示页面"""
+    return templates.TemplateResponse("full_transcript.html", {"request": request})
+
+
 @app.get("/api/search")
 def search(
     q: str,
@@ -223,10 +229,42 @@ def get_word_frequencies_endpoint(
     }
 
 
+@app.get("/api/timeline")
+def get_timeline(db: Session = Depends(get_db)):
+    """
+    Get inscriptions grouped by era for timeline visualization.
+    Returns eras sorted by historical order with count and sample inscriptions.
+    """
+    timeline_data = crud.get_timeline_data(db)
+    return {"eras": timeline_data}
+
+
+@app.get("/api/eras")
+def get_eras(db: Session = Depends(get_db)):
+    """获取所有不重复的年号列表"""
+    eras = crud.get_all_eras(db)
+    return {"eras": eras}
+
+
+@app.get("/api/inscriptions/by-era/{era_name}")
+def get_inscriptions_by_era(era_name: str, db: Session = Depends(get_db)):
+    """按年号名称筛选墓志"""
+    inscriptions = crud.get_inscriptions_by_era(db, era_name)
+    # Parse image_url JSON string back to list
+    for item in inscriptions:
+        if item.image_url:
+            try:
+                item.image_url = json.loads(item.image_url)
+            except:
+                item.image_url = []
+    return {"items": inscriptions, "total": len(inscriptions)}
+
+
 @app.get("/api/frequencies/official-titles")
 def get_official_titles_frequencies(
     era: Optional[str] = Query(None, description="Filter by era (时代)"),
     top_n: int = Query(50, description="Number of top words to return"),
+    type: Optional[str] = Query("south", description="Type of officials: 'south' or 'north'"),
     db: Session = Depends(get_db),
 ):
     """
@@ -234,15 +272,14 @@ def get_official_titles_frequencies(
 
     - **era**: Optional era filter (e.g., "唐代", "宋代")
     - **top_n**: Number of top words to return (default 50)
+    - **type**: 'south' for 南面官, 'north' for 北面官
 
     Returns JSON with word frequencies.
     """
     import re
-    import zhconv
 
-    # 用户指定的官称列表（简体 + 繁体版本）
-    # 格式: (显示名, [简体, 繁体, ...])
-    OFFICIAL_TITLE_PAIRS = [
+    # 南面官官称列表（简体 + 繁体版本）
+    SOUTH_OFFICIAL_TITLE_PAIRS = [
         ("處置使", ["处置使", "處置使"]),
         ("制置使", ["制置使"]),
         ("兵馬都總管", ["兵马都总管", "兵馬都總管"]),
@@ -251,15 +288,15 @@ def get_official_titles_frequencies(
         ("節度使", ["节度使", "節度使"]),
         ("節度副使", ["节度副使", "節度副使"]),
         ("行軍司馬", ["行军司马", "行軍司馬"]),
-        ("團練使", ["团练使", "團練使"]),
+        ("團練使", ["团练使", "團練習"]),
         ("觀察使", ["观察使", "觀察使"]),
         ("觀察判官", ["观察判官", "觀察判官"]),
-        ("商稅判官", ["商税判官", "商稅判官"]),
+        ("商稅判官", ["商税判官"]),
         ("軍事判官", ["军事判官", "軍事判官"]),
         ("留守判官", ["留守判官"]),
         ("防禦使", ["防御使", "防禦使"]),
         ("州刺史", ["州刺史"]),
-        ("州軍州事", ["州军州事", "州軍州事"]),
+        ("州軍州事", ["州军州事"]),
         ("縣令", ["县令", "縣令"]),
         ("縣丞", ["县丞", "縣丞"]),
         ("縣主簿", ["县主簿", "縣主簿"]),
@@ -270,7 +307,7 @@ def get_official_titles_frequencies(
         ("警巡", ["警巡"]),
         ("博士", ["博士"]),
         ("都部署", ["都部署"]),
-        ("檢校太子賓客", ["检校太子宾客", "檢校太子賓客", "太子宾客", "太子賓客"]),
+        ("檢校太子賓客", ["检校太子宾客", "檢校太子賓客", "太子賓客"]),
         ("太子太傅", ["太子太傅"]),
         ("太子少傅", ["太子少傅"]),
         ("太子太師", ["太子太师", "太子太師"]),
@@ -280,24 +317,23 @@ def get_official_titles_frequencies(
         ("太子中舍", ["太子中舍"]),
         ("太子中允", ["太子中允"]),
         ("校書郎", ["校书郎", "校書郎"]),
-        ("秘書監", ["秘书监", "秘書監", "秘书少监", "秘書少監"]),
+        ("秘書監", ["秘书监", "秘書監", "秘書少監"]),
         ("開國子", ["开国子", "開國子"]),
-        ("檢校國子祭酒", ["检校国子祭酒", "檢校國子祭酒", "国子祭酒", "國子祭酒"]),
-        ("太僕卿", ["太仆卿", "太僕卿", "太仆少卿", "太僕少卿"]),
+        ("檢校國子祭酒", ["检校国子祭酒", "檢校國子祭酒", "國子祭酒"]),
+        ("太僕卿", ["太仆卿", "太僕卿", "太僕少卿"]),
         ("大理寺", ["大理寺"]),
-        ("司農少卿", ["司农少卿", "司農少卿", "司农卿", "司農卿"]),
-        ("宣政殿學士", ["宣政殿学士", "宣政殿學士", "宣政殿大学士", "宣政殿大學士"]),
+        ("司農卿", ["司农少卿", "司農卿"]),
+        ("宣政殿學士", ["宣政殿学士", "宣政殿學士", "宣政殿大學士"]),
         ("觀書殿學士", ["观书殿学士", "觀書殿學士"]),
         ("昭文館直學士", ["昭文馆直学士", "昭文館直學士"]),
-        ("乾文閣待制", ["乾文阁待制", "乾文閣待制"]),
-        ("乾文閣待制直學士", ["乾文阁待制直学士", "乾文閣待制直學士"]),
+        ("乾文閣待制", ["乾文阁待制", "乾文閣待制", "乾文閣待制直學士"]),
         ("翰林學士", ["翰林学士", "翰林學士"]),
         ("宣徽使", ["宣徽使"]),
-        ("知内承宣事", ["知内承宣事"]),
+        ("知内承宣事", ["知内承宣事", "知承宣事"]),
         ("尚書令", ["尚书令", "尚書令"]),
         ("左僕射", ["左仆射", "左僕射"]),
         ("右僕射", ["右仆射", "右僕射"]),
-        ("参知政事", ["参知政事"]),
+        ("参知政事", ["参知政事", "參知政事"]),
         ("禮部尚書", ["礼部尚书", "禮部尚書"]),
         ("吏部尚書", ["吏部尚书", "吏部尚書"]),
         ("兵部尚書", ["兵部尚书", "兵部尚書"]),
@@ -308,7 +344,7 @@ def get_official_titles_frequencies(
         ("御史中丞", ["御史中丞"]),
         ("殿中侍御史", ["殿中侍御史"]),
         ("殿中丞", ["殿中丞"]),
-        ("殿中監", ["殿中监", "殿中監", "殿中少监", "殿中少監"]),
+        ("殿中監", ["殿中监", "殿中監", "殿中少監"]),
         ("檢校太師", ["检校太师", "檢校太師"]),
         ("檢校太保", ["检校太保", "檢校太保"]),
         ("檢校太傅", ["检校太傅", "檢校太傅"]),
@@ -322,9 +358,32 @@ def get_official_titles_frequencies(
         ("中書省事", ["中书省事", "中書省事"]),
         ("中書門下平章事", ["中书门下平章事", "中書門下平章事"]),
         ("門下侍郎", ["门下侍郎", "門下侍郎"]),
-        ("銀青崇禄大夫", ["银青崇禄大夫", "銀青崇禄大夫"]),
-        ("紫崇禄大夫", ["紫崇禄大夫"]),
+        ("崇禄大夫", ["崇禄大夫"]),
     ]
+
+    # 北面官官称列表（简体 + 繁体版本）
+    NORTH_OFFICIAL_TITLE_PAIRS = [
+        ("糺使", ["糺使"]),
+        ("惕隱", ["惕隐", "惕隱"]),
+        ("夷離畢", ["夷离毕", "夷離畢"]),
+        ("林牙", ["林牙"]),
+        ("侍衛", ["侍卫", "侍衛"]),
+        ("宣徽南院", ["宣徽南院", "南院宣徽", "南院"]),
+        ("宣徽北院", ["宣徽北院", "北院宣徽", "北院"]),
+        ("都統軍", ["都统军", "都統軍"]),
+        ("南大王", ["南大王"]),
+        ("北大王", ["北大王"]),
+        ("北樞密院", ["北枢密院", "北樞密院"]),
+        ("樞密使", ["枢密使", "樞密使"]),
+        ("北宰相", ["北宰相"]),
+        ("南宰相", ["南宰相"]),
+        ("于越", ["于越"]),
+        ("警巡", ["警巡"]),
+        ("詳穩", ["详稳", "詳穩"]),
+    ]
+
+    # 选择南面官或北面官
+    title_pairs = SOUTH_OFFICIAL_TITLE_PAIRS if type == "south" else NORTH_OFFICIAL_TITLE_PAIRS
 
     # 获取碑文文本
     transcripts = get_all_transcripts(db, era=era)
@@ -337,7 +396,7 @@ def get_official_titles_frequencies(
 
     # 统计词语出现次数
     title_counts = {}
-    for display_name, variants in OFFICIAL_TITLE_PAIRS:
+    for display_name, variants in title_pairs:
         total_count = sum(len(re.findall(re.escape(v), text)) for v in variants)
         if total_count > 0:
             title_counts[display_name] = total_count
