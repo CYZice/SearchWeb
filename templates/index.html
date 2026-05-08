@@ -348,7 +348,7 @@
             opacity: 1;
         }
 
-        /* 时代筛选输入框 */
+        /* 年号筛选输入框 */
         .era-input {
             padding: 0.5rem 1rem;
             font-family: 'Noto Serif SC', serif;
@@ -591,10 +591,6 @@
                         @click="switchFrequencySource('official-titles')">
                         官称词频
                     </span>
-                    <span class="text-sm text-[var(--ink-gray)] ml-4"
-                        v-if="frequencySource === 'inscriptions'">时代筛选：</span>
-                    <input v-model="eraFilter" @keyup.enter="loadFrequencies" type="text" class="era-input"
-                        placeholder="如：唐代" v-if="frequencySource === 'inscriptions'">
                     <button @click="loadFrequencies" class="btn-seal text-xs">查询</button>
                 </div>
             </div>
@@ -863,7 +859,6 @@
                 const selectedItem = ref(null)
                 const currentImageIndex = ref(0)
                 const activeTab = ref('search')
-                const eraFilter = ref('')
                 const frequencySource = ref('inscriptions')  // 'inscriptions' or 'official-titles'
                 const wordcloudUrl = ref('')
                 const wordcloudLoading = ref(false)
@@ -975,8 +970,6 @@
                 }
 
                 const loadFrequencies = async () => {
-                    const currentEra = eraFilter.value.trim()
-
                     // 官称词频 - 同时获取南面官和北面官
                     if (frequencySource.value === 'official-titles') {
                         frequenciesLoading.value = true
@@ -1001,13 +994,8 @@
 
                     // 碑文词频
                     frequenciesLoading.value = true
-                    let url = '/api/frequencies?top_n=15'
-                    if (currentEra) {
-                        url += '&era=' + encodeURIComponent(currentEra)
-                    }
-
                     try {
-                        const response = await fetch(url)
+                        const response = await fetch('/api/frequencies?top_n=15')
                         const data = await response.json()
                         await nextTick()
                         setTimeout(() => renderFrequencyChart(data.frequencies), 50)
@@ -1151,7 +1139,6 @@
                     fieldOptions,
                     selectedFields,
                     activeTab,
-                    eraFilter,
                     frequencySource,
                     wordcloudUrl,
                     wordcloudLoading,
