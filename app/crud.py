@@ -122,26 +122,77 @@ def create_inscription(db: Session, inscription_data: dict):
 
 def get_timeline_data(db: Session, sample_size: int = 5):
     """Get inscriptions grouped by era for timeline view."""
-    # Query all inscriptions grouped by era
+    import re
+
     inscriptions = db.query(
         models.Inscription.era,
         models.Inscription.id,
         models.Inscription.name,
         models.Inscription.serial_num
-    ).order_by(models.Inscription.era).all()
+    ).all()
 
-    # Group by era
+    def extract_era_name(era_str):
+        """从 era 字符串提取年号名称"""
+        if not era_str:
+            return None
+        era_clean = re.sub(r'[（(][^）)]*[）)]', '', era_str)
+        chinese_numerals = '一二三四五六七八九十百'
+
+        # 特殊处理"期間"（不以年结尾）
+        if era_clean.endswith('間') and not era_clean.endswith('月間'):
+            return era_clean
+
+        # 找到最后一个"年"标记
+        last_year_pos = -1
+        for i in range(len(era_clean) - 1, -1, -1):
+            if era_clean[i] == '年' and not (i > 0 and era_clean[i-1] == '前'):
+                last_year_pos = i
+                break
+
+        if last_year_pos >= 0:
+            j = last_year_pos - 1
+            while j >= 0 and era_clean[j] in chinese_numerals:
+                j -= 1
+            if j >= 0 and era_clean[j] == '元':
+                j -= 1
+            return era_clean[:j+1].strip()
+        return era_clean.strip()
+
+    def extract_year_num(era_str):
+        """从 era 字符串提取年份数字（如"三" -> 3）"""
+        if not era_str:
+            return 999
+        chinese_to_arabic = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+                            '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
+        era_clean = re.sub(r'[（(][^）)]*[）)]', '', era_str)
+        # 找第一个中文字符数字
+        for c in era_clean:
+            if c in chinese_to_arabic:
+                return chinese_to_arabic[c]
+        return 999
+
+    # 按提取的年号分组
     era_groups = {}
     for era, ins_id, name, serial_num in inscriptions:
-        if era not in era_groups:
-            era_groups[era] = {"name": era, "count": 0, "samples": []}
-        era_groups[era]["count"] += 1
-        if len(era_groups[era]["samples"]) < sample_size:
-            era_groups[era]["samples"].append({
+        era_name = extract_era_name(era)
+        if not era_name:
+            continue
+        if era_name not in era_groups:
+            era_groups[era_name] = {"name": era_name, "count": 0, "samples": []}
+        era_groups[era_name]["count"] += 1
+        if len(era_groups[era_name]["samples"]) < sample_size:
+            era_groups[era_name]["samples"].append({
                 "id": ins_id,
                 "name": name,
-                "serial_num": serial_num
+                "serial_num": serial_num,
+                "_sort_key": extract_year_num(era)
             })
+
+    # 对每个年号内的样本按年份排序
+    for era_name in era_groups:
+        era_groups[era_name]["samples"].sort(key=lambda x: x["_sort_key"])
+        for item in era_groups[era_name]["samples"]:
+            del item["_sort_key"]
 
     timeline_data = list(era_groups.values())
 
