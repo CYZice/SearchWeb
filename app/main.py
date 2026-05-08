@@ -88,12 +88,15 @@ def search(
     fields: Optional[List[str]] = Query(None),
     page: int = Query(1, ge=1),
     size: int = Query(15, ge=1, le=100),
+    sort_by: Optional[str] = Query(None, description="Sort field: id, name, era, serial_num"),
+    sort_order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
     db: Session = Depends(get_db),
 ):
     skip = (page - 1) * size
     limit = size
     results, total_count = crud.search_inscriptions(
-        db, q, fields=fields, skip=skip, limit=limit
+        db, q, fields=fields, skip=skip, limit=limit,
+        sort_by=sort_by, sort_order=sort_order
     )
     # Parse image_url JSON string back to list for response
     for item in results:
@@ -152,6 +155,27 @@ def overwrite_inscription(data: dict, db: Session = Depends(get_db)):
     db.refresh(db_obj)
 
     return {"status": "success", "id": db_obj.id, "name": db_obj.name}
+
+
+@app.patch("/api/inscriptions/{inscription_id}")
+def update_inscription(
+    inscription_id: int,
+    data: dict,
+    db: Session = Depends(get_db)
+):
+    """部分更新单条记录"""
+    db_obj = crud.get_inscription(db, inscription_id)
+    if not db_obj:
+        raise HTTPException(status_code=404, detail="Inscription not found")
+
+    # 字段白名单
+    ALLOWED_FIELDS = {
+        "serial_num", "name", "era", "alias", "discovery",
+        "collection", "publication", "format", "image", "transcript", "image_url"
+    }
+    updates = {k: v for k, v in data.items() if k in ALLOWED_FIELDS}
+    updated = crud.update_inscription(db, inscription_id, updates)
+    return updated
 
 
 @app.delete("/api/inscriptions/{inscription_id}")

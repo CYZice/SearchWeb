@@ -223,6 +223,145 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+
+        .modal-content .close {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #999;
+            cursor: pointer;
+        }
+
+        .modal-content .close:hover {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: var(--secondary-color);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        textarea.form-input {
+            resize: vertical;
+        }
+
+        .form-actions {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+
+        /* Pagination Styles */
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding: 10px 0;
+        }
+
+        .pagination-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .pagination-controls button {
+            padding: 5px 10px;
+            border: 1px solid var(--border-color);
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .pagination-controls button:hover {
+            background-color: #f5f5f5;
+        }
+
+        .pagination-controls button.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .pagination-controls button:disabled {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .page-size-select {
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-left: 10px;
+        }
     </style>
 </head>
 
@@ -279,9 +418,9 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>器名</th>
-                        <th>时代</th>
+                        <th class="sortable" onclick="toggleSort('id')">ID</th>
+                        <th class="sortable" onclick="toggleSort('name')">器名</th>
+                        <th class="sortable" onclick="toggleSort('era')">时代</th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -289,6 +428,61 @@
                     <!-- Data items will be injected here -->
                 </tbody>
             </table>
+            <!-- Pagination -->
+            <div class="pagination" id="pagination"></div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div id="edit-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeEditModal()">&times;</span>
+                <h3>编辑资料</h3>
+                <input type="hidden" id="edit-id">
+                <div class="form-group">
+                    <label>器名</label>
+                    <input type="text" id="edit-name" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>编号</label>
+                    <input type="text" id="edit-serial-num" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>时代</label>
+                    <input type="text" id="edit-era" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>别称</label>
+                    <input type="text" id="edit-alias" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>出土</label>
+                    <input type="text" id="edit-discovery" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>现藏</label>
+                    <input type="text" id="edit-collection" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>著录</label>
+                    <input type="text" id="edit-publication" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>形制</label>
+                    <input type="text" id="edit-format" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>图片出处</label>
+                    <input type="text" id="edit-image" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>释文</label>
+                    <textarea id="edit-transcript" class="form-input" rows="4"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button class="btn" onclick="closeEditModal()">取消</button>
+                    <button class="btn btn-primary" onclick="saveEdit()">保存修改</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -469,19 +663,29 @@
             }
         }
 
-        // Maintenance Logic
+        // Maintenance Logic - Pagination State
+        let currentPage = 1;
+        let currentSize = 15;
+        let totalCount = 0;
+        let currentQuery = '';
+        let currentSort = { field: 'id', order: 'asc' };
+
         async function searchData() {
-            const query = document.getElementById('maintain-search').value;
+            currentQuery = document.getElementById('maintain-search').value;
             const tbody = document.getElementById('data-list');
             tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">加载中...</td></tr>';
 
             try {
-                const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-                const results = await response.json();
+                const url = `/api/search?q=${encodeURIComponent(currentQuery)}&page=${currentPage}&size=${currentSize}&sort_by=${currentSort.field}&sort_order=${currentSort.order}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                const results = data.items || [];
+                totalCount = data.total || 0;
 
                 tbody.innerHTML = '';
                 if (results.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">无数据</td></tr>';
+                    document.getElementById('pagination').innerHTML = '';
                     return;
                 }
 
@@ -492,14 +696,80 @@
                     <td><a href="/api/inscriptions/${item.id}" target="_blank">${item.name}</a></td>
                     <td>${item.era || '-'}</td>
                     <td>
+                        <button class="btn btn-small" onclick="editItem(${item.id})">编辑</button>
                         <button class="btn btn-small btn-danger" onclick="deleteItem(${item.id})">删除</button>
                     </td>
                 `;
                     tbody.appendChild(tr);
                 });
+
+                renderPagination();
             } catch (e) {
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">加载失败</td></tr>';
             }
+        }
+
+        function goToPage(page) {
+            const totalPages = Math.ceil(totalCount / currentSize);
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            searchData();
+        }
+
+        function changePageSize() {
+            currentSize = document.getElementById('page-size').value;
+            currentPage = 1;
+            searchData();
+        }
+
+        function renderPagination() {
+            const totalPages = Math.ceil(totalCount / currentSize);
+            const pagination = document.getElementById('pagination');
+
+            if (totalPages <= 1) {
+                pagination.innerHTML = `<div class="pagination-info">共 ${totalCount} 条记录</div>`;
+                return;
+            }
+
+            let html = `
+                <div class="pagination-info">
+                    共 ${totalCount} 条记录，每页
+                    <select id="page-size" class="page-size-select" onchange="changePageSize()">
+                        <option value="15" ${currentSize===15?'selected':''}>15</option>
+                        <option value="30" ${currentSize===30?'selected':''}>30</option>
+                        <option value="50" ${currentSize===50?'selected':''}>50</option>
+                        <option value="100" ${currentSize===100?'selected':''}>100</option>
+                    </select> 条
+                </div>
+                <div class="pagination-controls">
+                    <button onclick="goToPage(1)" ${currentPage===1?'disabled':''}>首页</button>
+                    <button onclick="goToPage(${currentPage - 1})" ${currentPage===1?'disabled':''}>上一页</button>
+            `;
+
+            // Page numbers
+            const start = Math.max(1, currentPage - 2);
+            const end = Math.min(totalPages, currentPage + 2);
+            for (let i = start; i <= end; i++) {
+                html += `<button onclick="goToPage(${i})" class="${i===currentPage?'active':''}">${i}</button>`;
+            }
+
+            html += `
+                    <button onclick="goToPage(${currentPage + 1})" ${currentPage===totalPages?'disabled':''}>下一页</button>
+                    <button onclick="goToPage(${totalPages})" ${currentPage===totalPages?'disabled':''}>末页</button>
+                </div>
+            `;
+            pagination.innerHTML = html;
+        }
+
+        function toggleSort(field) {
+            if (currentSort.field === field) {
+                currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.field = field;
+                currentSort.order = 'asc';
+            }
+            currentPage = 1;
+            searchData();
         }
 
         async function deleteItem(id) {
@@ -521,6 +791,84 @@
 
         function showLoading(show) {
             document.getElementById('loading').style.display = show ? 'flex' : 'none';
+        }
+
+        // Edit Modal Functions
+        async function editItem(id) {
+            showLoading(true);
+            try {
+                const response = await fetch(`/api/inscriptions/${id}`);
+                const data = await response.json();
+
+                document.getElementById('edit-id').value = data.id;
+                document.getElementById('edit-name').value = data.name || '';
+                document.getElementById('edit-serial-num').value = data.serial_num || '';
+                document.getElementById('edit-era').value = data.era || '';
+                document.getElementById('edit-alias').value = data.alias || '';
+                document.getElementById('edit-discovery').value = data.discovery || '';
+                document.getElementById('edit-collection').value = data.collection || '';
+                document.getElementById('edit-publication').value = data.publication || '';
+                document.getElementById('edit-format').value = data.format || '';
+                document.getElementById('edit-image').value = data.image || '';
+                document.getElementById('edit-transcript').value = data.transcript || '';
+
+                document.getElementById('edit-modal').style.display = 'block';
+            } catch (e) {
+                alert('获取数据失败');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+        }
+
+        async function saveEdit() {
+            const id = document.getElementById('edit-id').value;
+            if (!id) return;
+
+            const updates = {
+                name: document.getElementById('edit-name').value,
+                serial_num: document.getElementById('edit-serial-num').value,
+                era: document.getElementById('edit-era').value,
+                alias: document.getElementById('edit-alias').value,
+                discovery: document.getElementById('edit-discovery').value,
+                collection: document.getElementById('edit-collection').value,
+                publication: document.getElementById('edit-publication').value,
+                format: document.getElementById('edit-format').value,
+                image: document.getElementById('edit-image').value,
+                transcript: document.getElementById('edit-transcript').value
+            };
+
+            showLoading(true);
+            try {
+                const response = await fetch(`/api/inscriptions/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updates)
+                });
+
+                if (response.ok) {
+                    closeEditModal();
+                    searchData();
+                } else {
+                    const err = await response.json();
+                    alert('保存失败: ' + (err.detail || '未知错误'));
+                }
+            } catch (e) {
+                alert('网络错误');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('edit-modal');
+            if (event.target === modal) {
+                closeEditModal();
+            }
         }
     </script>
 

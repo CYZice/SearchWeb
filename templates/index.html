@@ -920,7 +920,7 @@
                 // 扁平化时间轴数据：将按年号分组的数据展平为墓志列表
                 const flatTimelineInscriptions = () => {
                     const filtered = selectedEra.value
-                        ? timelineEras.value.filter(era => era.name.includes(selectedEra.value))
+                        ? timelineEras.value.filter(era => era.name === selectedEra.value)
                         : timelineEras.value
 
                     // 从每个时代中收集所有 samples

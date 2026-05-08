@@ -11,7 +11,8 @@ def get_inscriptions(db: Session, skip: int = 0, limit: int = 100):
 
 
 def search_inscriptions(
-    db: Session, query: str, fields: List[str] = None, skip: int = 0, limit: int = 100
+    db: Session, query: str, fields: List[str] = None, skip: int = 0, limit: int = 100,
+    sort_by: str = None, sort_order: str = "asc"
 ):
     # Weighted search: Name match > Transcript match > Discovery match
     # Using case to assign weights for ordering
@@ -88,7 +89,20 @@ def search_inscriptions(
     q = db.query(models.Inscription).filter(or_(*conditions))
     total_count = q.count()
 
-    if ordering is not None:
+    # Apply sorting if specified
+    SORTABLE_FIELDS = {
+        "id": models.Inscription.id,
+        "name": models.Inscription.name,
+        "era": models.Inscription.era,
+        "serial_num": models.Inscription.serial_num,
+    }
+
+    if sort_by and sort_by in SORTABLE_FIELDS:
+        order_col = SORTABLE_FIELDS[sort_by]
+        if sort_order == "desc":
+            order_col = order_col.desc()
+        q = q.order_by(order_col)
+    elif ordering is not None:
         q = q.order_by(ordering, models.Inscription.serial_num)
     else:
         q = q.order_by(models.Inscription.serial_num)
@@ -118,6 +132,21 @@ def create_inscription(db: Session, inscription_data: dict):
     db.commit()
     db.refresh(db_item)
     return db_item
+
+
+def update_inscription(db: Session, inscription_id: int, updates: dict):
+    """部分更新单条记录"""
+    db_obj = db.query(models.Inscription).filter(
+        models.Inscription.id == inscription_id
+    ).first()
+    if not db_obj:
+        return None
+    for key, value in updates.items():
+        if hasattr(db_obj, key) and key != 'id':
+            setattr(db_obj, key, value)
+    db.commit()
+    db.refresh(db_obj)
+    return db_obj
 
 
 def get_timeline_data(db: Session, sample_size: int = 5):
