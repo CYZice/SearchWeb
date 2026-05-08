@@ -149,56 +149,86 @@ def update_inscription(db: Session, inscription_id: int, updates: dict):
     return db_obj
 
 
-def get_timeline_data(db: Session, sample_size: int = 5):
-    """Get inscriptions grouped by era for timeline view."""
+def extract_era_name(era_str: str):
+    """从 era 字符串提取年号名称"""
     import re
+    if not era_str:
+        return None
+    era_clean = re.sub(r'[（(][^）)]*[）)]', '', era_str)
+    chinese_numerals = '一二三四五六七八九十百'
 
+    # 特殊处理"期間"（不以年结尾）
+    if era_clean.endswith('間') and not era_clean.endswith('月間'):
+        return era_clean
+
+    # 找到最后一个"年"标记
+    last_year_pos = -1
+    for i in range(len(era_clean) - 1, -1, -1):
+        if era_clean[i] == '年' and not (i > 0 and era_clean[i-1] == '前'):
+            last_year_pos = i
+            break
+
+    if last_year_pos >= 0:
+        j = last_year_pos - 1
+        while j >= 0 and era_clean[j] in chinese_numerals:
+            j -= 1
+        if j >= 0 and era_clean[j] == '元':
+            j -= 1
+        return era_clean[:j+1].strip()
+    return era_clean.strip()
+
+
+def extract_year_num(era_str: str) -> int:
+    """从 era 字符串提取年份数字（如"三" -> 3）"""
+    import re
+    if not era_str:
+        return 999
+    chinese_to_arabic = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+                        '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
+    era_clean = re.sub(r'[（(][^）)]*[）)]', '', era_str)
+    # 找第一个中文字符数字
+    for c in era_clean:
+        if c in chinese_to_arabic:
+            return chinese_to_arabic[c]
+    return 999
+
+
+# Historical era ordering
+ERA_ORDER = {
+    "唐代": 0, "五代": 1, "五代十國": 1,
+    "宋代": 10, "北宋": 11, "南宋": 12,
+    "辽代": 20, "早期": 21,
+    "天復": 30, "天赞": 31, "天顯": 32, "會同": 33, "天祿": 34,
+    "景宗": 35, "乾亨": 36, "應曆": 37, "保寧": 38, "統和": 39,
+    "開泰": 40, "太平": 41, "大康": 42, "大安": 43, "壽昌": 44,
+    "乾統": 45, "天慶": 46, "天輔": 47,
+    "金代": 50, "金": 51,
+    "元代": 60, "元": 61,
+    "明代": 70, "明": 71,
+    "清代": 80, "清": 81,
+}
+
+
+def get_era_order(era_name: str) -> int:
+    return ERA_ORDER.get(era_name, 100)
+
+
+def get_timeline_data(db: Session, page: int = 1, page_size: int = 50, include_all: bool = False):
+    """
+    Get inscriptions grouped by era for timeline view.
+
+    Args:
+        db: Database session
+        page: Page number (1-indexed)
+        page_size: Number of eras per page
+        include_all: If True, return all inscriptions for each era (not just samples)
+    """
     inscriptions = db.query(
         models.Inscription.era,
         models.Inscription.id,
         models.Inscription.name,
         models.Inscription.serial_num
     ).all()
-
-    def extract_era_name(era_str):
-        """从 era 字符串提取年号名称"""
-        if not era_str:
-            return None
-        era_clean = re.sub(r'[（(][^）)]*[）)]', '', era_str)
-        chinese_numerals = '一二三四五六七八九十百'
-
-        # 特殊处理"期間"（不以年结尾）
-        if era_clean.endswith('間') and not era_clean.endswith('月間'):
-            return era_clean
-
-        # 找到最后一个"年"标记
-        last_year_pos = -1
-        for i in range(len(era_clean) - 1, -1, -1):
-            if era_clean[i] == '年' and not (i > 0 and era_clean[i-1] == '前'):
-                last_year_pos = i
-                break
-
-        if last_year_pos >= 0:
-            j = last_year_pos - 1
-            while j >= 0 and era_clean[j] in chinese_numerals:
-                j -= 1
-            if j >= 0 and era_clean[j] == '元':
-                j -= 1
-            return era_clean[:j+1].strip()
-        return era_clean.strip()
-
-    def extract_year_num(era_str):
-        """从 era 字符串提取年份数字（如"三" -> 3）"""
-        if not era_str:
-            return 999
-        chinese_to_arabic = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
-                            '六': 6, '七': 7, '八': 8, '九': 9, '十': 10}
-        era_clean = re.sub(r'[（(][^）)]*[）)]', '', era_str)
-        # 找第一个中文字符数字
-        for c in era_clean:
-            if c in chinese_to_arabic:
-                return chinese_to_arabic[c]
-        return 999
 
     # 按提取的年号分组
     era_groups = {}
@@ -209,7 +239,7 @@ def get_timeline_data(db: Session, sample_size: int = 5):
         if era_name not in era_groups:
             era_groups[era_name] = {"name": era_name, "count": 0, "samples": []}
         era_groups[era_name]["count"] += 1
-        if len(era_groups[era_name]["samples"]) < sample_size:
+        if include_all or len(era_groups[era_name]["samples"]) < 5:
             era_groups[era_name]["samples"].append({
                 "id": ins_id,
                 "name": name,
@@ -223,73 +253,39 @@ def get_timeline_data(db: Session, sample_size: int = 5):
         for item in era_groups[era_name]["samples"]:
             del item["_sort_key"]
 
-    timeline_data = list(era_groups.values())
+    timeline_data = sorted(list(era_groups.values()), key=lambda x: get_era_order(x["name"]))
 
-    # Historical era ordering
-    ERA_ORDER = {
-        "唐代": 0, "五代": 1, "五代十國": 1,
-        "宋代": 10, "北宋": 11, "南宋": 12,
-        "辽代": 20, "早期": 21,
-        "天復": 30, "天赞": 31, "天顯": 32, "會同": 33, "天祿": 34,
-        "景宗": 35, "乾亨": 36, "應曆": 37, "保寧": 38, "統和": 39,
-        "開泰": 40, "太平": 41, "大康": 42, "大安": 43, "壽昌": 44,
-        "乾統": 45, "天慶": 46, "天輔": 47,
-        "金代": 50, "金": 51,
-        "元代": 60, "元": 61,
-        "明代": 70, "明": 71,
-        "清代": 80, "清": 81,
+    # 计算总墓志数
+    total_inscriptions = sum(era["count"] for era in timeline_data)
+
+    # 分页
+    total_eras = len(timeline_data)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_eras = timeline_data[start_idx:end_idx]
+
+    return {
+        "eras": paginated_eras,
+        "total_eras": total_eras,
+        "total_inscriptions": total_inscriptions,
+        "page": page,
+        "page_size": page_size,
+        "has_more": end_idx < total_eras
     }
-
-    def get_era_order(era_name):
-        return ERA_ORDER.get(era_name, 100)
-
-    return sorted(timeline_data, key=lambda x: get_era_order(x["name"]))
 
 
 def get_all_eras(db: Session):
     """获取所有不重复的年号列表"""
-    import re
     inscriptions = db.query(models.Inscription.era).all()
     eras = set()
-    chinese_numerals = '一二三四五六七八九十百'
 
     for (era,) in inscriptions:
         if era:
-            # 去掉括号内容（公元xxx年）
-            era_clean = re.sub(r'[（(][^）)]*[）)]', '', era)
-
-            # 特殊处理"月間"（时期）
-            if era_clean.endswith('間') and not era_clean.endswith('月間'):
-                # 如"保寧間" - "間"是时代名称的一部分
-                eras.add(era_clean)
-                continue
-
-            # 找到年/月标记（不包含"年前"）
-            last_marker_pos = -1
-            for i in range(len(era_clean) - 1, -1, -1):
-                c = era_clean[i]
-                if c in ('年', '月') and not (i > 0 and era_clean[i-1] == '前'):
-                    last_marker_pos = i
-                    break
-
-            if last_marker_pos == -1:
-                if era_clean.strip():
-                    eras.add(era_clean.strip())
-                continue
-
-            # 找到标记，往回找到数字部分开始的位置
-            j = last_marker_pos - 1
-            while j >= 0 and era_clean[j] in chinese_numerals:
-                j -= 1
-            # 跳过"元"（元年）
-            if j >= 0 and era_clean[j] == '元':
-                j -= 1
-
-            era_name = era_clean[:j+1].strip()
+            era_name = extract_era_name(era)
             if era_name:
                 eras.add(era_name)
 
-    return sorted(list(eras))
+    return sorted(list(eras), key=get_era_order)
 
 
 def get_inscriptions_by_era(db: Session, era_name: str):

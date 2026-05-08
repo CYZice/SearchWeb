@@ -254,13 +254,23 @@ def get_word_frequencies_endpoint(
 
 
 @app.get("/api/timeline")
-def get_timeline(db: Session = Depends(get_db)):
+def get_timeline(
+    page: int = 1,
+    page_size: int = 50,
+    include_all: bool = False,
+    db: Session = Depends(get_db)
+):
     """
     Get inscriptions grouped by era for timeline visualization.
     Returns eras sorted by historical order with count and sample inscriptions.
+
+    Query params:
+    - page: Page number (1-indexed, default 1)
+    - page_size: Number of eras per page (default 50, set higher for more eras)
+    - include_all: If true, return all inscriptions for each era (not just 5 samples)
     """
-    timeline_data = crud.get_timeline_data(db)
-    return {"eras": timeline_data}
+    result = crud.get_timeline_data(db, page=page, page_size=page_size, include_all=include_all)
+    return result
 
 
 @app.get("/api/eras")

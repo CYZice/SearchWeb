@@ -12,6 +12,9 @@
         href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=ZCOOL+XiaoWei&display=swap"
         rel="stylesheet">
 
+    <!-- Vue.js 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
     <style>
         :root {
             --paper-white: #F5F0E6;
@@ -32,67 +35,67 @@
         body {
             margin: 0;
             padding: 0;
-            background: var(--paper-white);
+            background: var(--paper-old);
             font-family: 'Noto Serif SC', 'STKaiti', 'KaiTi', serif;
             color: var(--ink-black);
             min-height: 100vh;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 1.5rem;
+            background: var(--paper-white);
         }
 
         .header {
             text-align: center;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
             padding-bottom: 1rem;
-            border-bottom: 2px solid var(--paper-dark);
+            border-bottom: 1px solid var(--paper-dark);
         }
 
         .back-link {
             display: inline-block;
-            margin-bottom: 1rem;
-            color: var(--藏青);
+            margin-bottom: 0.5rem;
+            color: var(--vermilion);
             text-decoration: none;
             font-size: 0.9rem;
         }
 
         .back-link:hover {
-            color: var(--vermilion);
+            color: var(--vermilion-dark);
         }
 
         .inscription-title {
             font-family: 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
-            font-size: 2rem;
-            color: var(--藏青);
+            font-size: 1.8rem;
+            color: var(--ink-black);
             margin: 0.5rem 0;
         }
 
         .inscription-meta {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: var(--ink-gray);
             margin-top: 0.5rem;
         }
 
         .inscription-meta span {
-            margin: 0 0.5rem;
+            margin: 0 0.3rem;
         }
 
         /* 志文竖排展示 */
         .transcript-container {
             display: flex;
-            gap: 2rem;
-            margin-top: 2rem;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 1.5rem;
         }
 
         .transcript-panel {
-            flex: 2;
             background: linear-gradient(145deg, #FFFEF9 0%, var(--paper-old) 100%);
             border: 1px solid var(--paper-dark);
-            padding: 2rem;
-            min-height: 70vh;
+            padding: 1.5rem;
         }
 
         .transcript-title {
@@ -104,14 +107,15 @@
             border-left: 3px solid var(--vermilion);
         }
 
+        .transcript-wrapper {
+            display: inline-block;
+        }
+
         .transcript-content {
             writing-mode: vertical-rl;
             text-orientation: mixed;
-            height: 65vh;
             line-height: 2.5rem;
-            font-size: 1.3rem;
             letter-spacing: 0.1em;
-            overflow-y: auto;
             white-space: pre-wrap;
             word-break: break-all;
             font-family: 'STKaiti', 'KaiTi', serif;
@@ -188,15 +192,9 @@
             <div class="transcript-container">
                 <div class="transcript-panel">
                     <div class="transcript-title">誌文</div>
-                    <div class="transcript-content" v-html="inscription.transcript || '暂无誌文'"></div>
-                </div>
-
-                <div class="image-panel">
-                    <div v-if="inscription.image_url && inscription.image_url.length > 0">
-                        <img v-for="(img, idx) in inscription.image_url" :key="idx"
-                            :src="img" @click="window.open(img, '_blank')" :alt="'图片' + (idx + 1)">
+                    <div class="transcript-wrapper">
+                        <div class="transcript-content" :style="{ fontSize: computedFontSize }" v-html="inscription.transcript || '暂无誌文'"></div>
                     </div>
-                    <div v-else class="no-image">暂无图片</div>
                 </div>
             </div>
 
@@ -212,12 +210,37 @@
     {% endraw %}
 
     <script>
-        const { createApp, ref, onMounted } = Vue
+        const { createApp, ref, computed, onMounted } = Vue
 
         createApp({
             setup() {
                 const inscription = ref(null)
                 const loading = ref(true)
+
+                const computedFontSize = computed(() => {
+                    if (!inscription.value || !inscription.value.transcript) {
+                        return '1.2rem'
+                    }
+                    const text = inscription.value.transcript
+                    // 估算字符数（去除HTML标签）
+                    const charCount = text.replace(/<[^>]+>/g, '').length
+                    // 根据字数动态调整字号
+                    // 竖排时，每列约30-40字，宽度320px
+                    // 字数多则字号小，字数少则字号大
+                    let fontSize
+                    if (charCount < 200) {
+                        fontSize = '1.8rem'
+                    } else if (charCount < 400) {
+                        fontSize = '1.5rem'
+                    } else if (charCount < 600) {
+                        fontSize = '1.3rem'
+                    } else if (charCount < 1000) {
+                        fontSize = '1.1rem'
+                    } else {
+                        fontSize = '1rem'
+                    }
+                    return fontSize
+                })
 
                 onMounted(async () => {
                     const urlParams = new URLSearchParams(window.location.search)
@@ -249,7 +272,8 @@
 
                 return {
                     inscription,
-                    loading
+                    loading,
+                    computedFontSize
                 }
             }
         }).mount('#app')

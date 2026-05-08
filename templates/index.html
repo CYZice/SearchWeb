@@ -903,7 +903,7 @@
                     timelineLoading.value = true
                     try {
                         const [timelineRes, erasRes] = await Promise.all([
-                            fetch('/api/timeline'),
+                            fetch('/api/timeline?include_all=true'),
                             fetch('/api/eras')
                         ])
                         const timelineData = await timelineRes.json()
