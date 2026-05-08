@@ -637,7 +637,7 @@
                         <option value="">全部年号</option>
                         <option v-for="era in allEras" :key="era" :value="era">{{ era }}</option>
                     </select>
-                    <span class="text-sm text-[var(--ink-gray)]">共 {{ filteredTimelineEras().length }} 个时代</span>
+                    <span class="text-sm text-[var(--ink-gray)]">共 {{ flatTimelineInscriptions().length }} 条墓志</span>
                 </div>
             </div>
 
@@ -647,35 +647,18 @@
             </div>
 
             <div v-else class="space-y-2">
-                <div v-for="era in filteredTimelineEras()" :key="era.name"
-                    class="border border-[var(--paper-dark)] rounded">
-                    <!-- Era Header (clickable to expand) -->
-                    <div @click="toggleEra(era.name)"
-                        class="flex justify-between items-center p-4 cursor-pointer hover:bg-[var(--paper-old)] transition-colors">
-                        <div class="flex items-center gap-3">
-                            <span class="text-xl">{{ expandedEras[era.name] ? '📂' : '📁' }}</span>
-                            <h4 class="text-lg font-semibold text-[var(--藏青)]">{{ era.name }}</h4>
-                            <span class="text-sm px-2 py-0.5 bg-[var(--paper-dark)] rounded-full">
-                                {{ era.count }} 条
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Expandable Inscription List -->
-                    <div v-if="expandedEras[era.name]" class="border-t border-[var(--paper-dark)]">
-                        <div v-for="item in era.samples" :key="item.id"
-                            class="flex items-center gap-3 p-3 pl-12 hover:bg-[var(--paper-white)] cursor-pointer transition-colors"
-                            @click="openDetailFromTimeline(item)">
-                            <span class="text-xs text-[var(--ink-gray)]" style="font-family: monospace;">
-                                {{ item.serial_num }}
-                            </span>
-                            <span class="text-[var(--stone-green)]">{{ item.name }}</span>
-                        </div>
-                        <div v-if="era.count > era.samples.length"
-                            class="p-2 pl-12 text-sm text-[var(--ink-gray)] text-center">
-                            ... 还有 {{ era.count - era.samples.length }} 条
-                        </div>
-                    </div>
+                <div v-for="item in flatTimelineInscriptions()" :key="item.id"
+                    class="flex items-center gap-3 p-3 border-b border-[var(--paper-dark)] hover:bg-[var(--paper-old)] cursor-pointer transition-colors"
+                    @click="openDetailFromTimeline(item)">
+                    <span class="text-xs text-[var(--ink-gray)]" style="font-family: monospace;">
+                        {{ item.serial_num }}
+                    </span>
+                    <span class="text-[var(--stone-green)]">{{ item.name }}</span>
+                    <span class="text-xs text-[var(--ink-gray)]">{{ item.era }}</span>
+                </div>
+                <div v-if="flatTimelineInscriptions().length === 0"
+                    class="text-center py-8 text-[var(--ink-gray)]">
+                    暂无墓志
                 </div>
             </div>
         </div>
@@ -865,7 +848,6 @@
                 const frequenciesLoading = ref(false)
                 const timelineEras = ref([])
                 const timelineLoading = ref(false)
-                const expandedEras = ref({})
                 const allEras = ref([])
                 const selectedEra = ref('')
                 let frequencyCharts = {}
@@ -928,10 +910,6 @@
                         const erasData = await erasRes.json()
                         timelineEras.value = timelineData.eras || []
                         allEras.value = erasData.eras || []
-                        // Expand first era by default
-                        if (timelineData.eras && timelineData.eras.length > 0) {
-                            expandedEras.value[timelineData.eras[0].name] = true
-                        }
                     } catch (error) {
                         console.error('Error loading timeline:', error)
                     } finally {
@@ -939,25 +917,27 @@
                     }
                 }
 
-                const filteredTimelineEras = () => {
-                    if (!selectedEra.value) {
-                        return timelineEras.value
+                // 扁平化时间轴数据：将按年号分组的数据展平为墓志列表
+                const flatTimelineInscriptions = () => {
+                    const filtered = selectedEra.value
+                        ? timelineEras.value.filter(era => era.name.includes(selectedEra.value))
+                        : timelineEras.value
+
+                    // 从每个时代中收集所有 samples
+                    const inscriptions = []
+                    for (const era of filtered) {
+                        for (const item of era.samples) {
+                            inscriptions.push({
+                                ...item,
+                                era: era.name  // 保留年号信息
+                            })
+                        }
                     }
-                    return timelineEras.value.filter(era => era.name.includes(selectedEra.value))
+                    return inscriptions
                 }
 
                 const filterByEra = () => {
-                    // Reset expanded states
-                    expandedEras.value = {}
-                    // Expand first matching era if any
-                    const filtered = filteredTimelineEras()
-                    if (filtered.length > 0) {
-                        expandedEras.value[filtered[0].name] = true
-                    }
-                }
-
-                const toggleEra = (eraName) => {
-                    expandedEras.value[eraName] = !expandedEras.value[eraName]
+                    // 筛选时不需要特殊处理，flatTimelineInscriptions 会自动响应
                 }
 
                 const openTranscriptInNewTab = (id) => {
@@ -1145,7 +1125,6 @@
                     frequenciesLoading,
                     timelineEras,
                     timelineLoading,
-                    expandedEras,
                     toggleField,
                     performSearch,
                     goToPage,
@@ -1155,9 +1134,8 @@
                     switchFrequencySource,
                     loadFrequencies,
                     loadTimeline,
-                    toggleEra,
                     filterByEra,
-                    filteredTimelineEras,
+                    flatTimelineInscriptions,
                     allEras,
                     selectedEra,
                     openTranscriptInNewTab,
