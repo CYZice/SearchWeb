@@ -31,9 +31,15 @@ python scripts/word_parser.py            # 解析 data/raw_word/ 目录下的 Wo
 | GET | `/api/inscriptions/{id}` | 获取单条记录 |
 | GET | `/api/wordcloud?era=唐代&width=1200&height=800` | 生成词云图片 |
 | GET | `/api/frequencies?era=唐代&top_n=50` | 获取词频统计 |
+| GET | `/api/frequencies/official-titles?era=唐代&top_n=50` | 官称词频统计 |
 | POST | `/api/upload` | 上传 Word 文件批量导入 |
-| POST | `/api/inscriptions/overwrite` | 覆盖更新已有记录 |
+| POST | `/api/inscriptions/overwrite` | 覆盖更新已有记录（输入: `{"existing_id": int, "new_data": dict}`） |
 | DELETE | `/api/inscriptions/{id}` | 删除记录 |
+
+### 临时路由
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/preview` | 临时预览新古典风格页面 |
 
 ## 架构设计
 
@@ -61,14 +67,10 @@ Client (Browser) → API Layer (FastAPI) → Business Logic (CRUD/Services) → 
 - `image_url` (图片路径，JSON 列表格式存储)
 
 ### 搜索特性
-- **权重排序**：name 匹配 > transcript 匹配 > discovery 匹配
+- **权重排序**：name 匹配 > transcript 匹配 > discovery 匹配（仅当 name 在 selected fields 中时）
 - **繁简转换**：自动支持简体中文、繁体中文变体搜索
 - **字段筛选**：可指定搜索字段组合（name, era, alias, transcript, discovery, collection, publication, format, image）
-
-### 词云与词频
-- `/api/wordcloud` 返回 PNG 图片，支持按时代（era）筛选
-- `/api/frequencies` 返回 JSON 格式的词频统计数据
-- 使用 jieba 分词，包含中文停用词过滤（的、了、是、在、和、碑、文、字、石等）
+- **官称词频**：`/api/frequencies/official-titles` 支持从 `scripts/官称.md` 读取官称列表进行定向统计
 
 ### Word 导入流程
 `word_parser.py` 的 `process_import()` 函数：
@@ -77,8 +79,17 @@ Client (Browser) → API Layer (FastAPI) → Business Logic (CRUD/Services) → 
 3. 新记录写入数据库，冲突记录跳过并报告
 4. 小于 50KB 的图片作为行内字符处理
 
+### 词云与词频
+- `/api/wordcloud` 返回 PNG 图片，支持按时代（era）筛选
+- `/api/frequencies` 返回 JSON 格式的词频统计数据
+- `/api/frequencies/official-titles` 返回官称词频（从 `scripts/官称.md` 读取官称列表）
+- 使用 jieba 分词，包含中文停用词过滤（的、了、是、在、和、碑、文、字、石等）
+- 时间表达式（如"二年"、"四月"）会在分词时过滤
+
+### 数据库迁移
+启动时会自动检测 `inscriptions` 表是否有 `image` 列，若无则执行 ALTER TABLE 添加（向后兼容旧数据库）
+
 ## 技术栈
-- **后端**：FastAPI 0.109.0, SQLAlchemy 2.0.25, uvicorn 0.27.0
 - **数据库**：SQLite（`data/inscriptions.db`）
 - **文档解析**：python-docx 1.1.0
 - **中文处理**：zhconv 1.4.3（繁简转换），jieba 0.42.1（分词）
