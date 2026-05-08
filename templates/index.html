@@ -637,7 +637,7 @@
                         <option value="">全部年号</option>
                         <option v-for="era in allEras" :key="era" :value="era">{{ era }}</option>
                     </select>
-                    <span class="text-sm text-[var(--ink-gray)]">共 {{ filteredTimelineEras.length }} 个时代</span>
+                    <span class="text-sm text-[var(--ink-gray)]">共 {{ filteredTimelineEras().length }} 个时代</span>
                 </div>
             </div>
 
@@ -647,7 +647,7 @@
             </div>
 
             <div v-else class="space-y-2">
-                <div v-for="era in filteredTimelineEras" :key="era.name"
+                <div v-for="era in filteredTimelineEras()" :key="era.name"
                     class="border border-[var(--paper-dark)] rounded">
                     <!-- Era Header (clickable to expand) -->
                     <div @click="toggleEra(era.name)"
