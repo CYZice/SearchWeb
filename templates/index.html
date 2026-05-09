@@ -611,13 +611,13 @@
                     <p class="mt-4 text-[var(--ink-gray)]">正在加载数据...</p>
                 </div>
                 <div v-else>
-                    <!-- 官称词频：双图表并列 -->
-                    <div v-if="frequencySource === 'official-titles'" class="flex gap-4">
-                        <div class="flex-1">
+                    <!-- 官称词频：双图表上下排列 -->
+                    <div v-if="frequencySource === 'official-titles'" class="flex flex-col gap-4">
+                        <div>
                             <h4 class="text-center text-sm font-semibold mb-2 text-[var(--ink-gray)]">南面官</h4>
                             <div id="frequencyChartSouth" style="height: 400px;"></div>
                         </div>
-                        <div class="flex-1">
+                        <div>
                             <h4 class="text-center text-sm font-semibold mb-2 text-[var(--ink-gray)]">北面官</h4>
                             <div id="frequencyChartNorth" style="height: 400px;"></div>
                         </div>
@@ -646,17 +646,42 @@
                 <p class="mt-4 text-[var(--ink-gray)]">正在加载...</p>
             </div>
 
-            <div v-else class="space-y-2">
-                <div v-for="item in flatTimelineInscriptions()" :key="item.id"
-                    class="flex items-center gap-3 p-3 border-b border-[var(--paper-dark)] hover:bg-[var(--paper-old)] cursor-pointer transition-colors"
-                    @click="openDetailFromTimeline(item)">
-                    <span class="text-xs text-[var(--ink-gray)]" style="font-family: monospace;">
-                        {{ item.serial_num }}
-                    </span>
-                    <span class="text-[var(--stone-green)]">{{ item.name }}</span>
-                    <span class="text-xs text-[var(--ink-gray)]">{{ item.era }}</span>
+            <div v-else class="space-y-6">
+                <div v-for="era in (selectedEra ? timelineEras.filter(e => e.name === selectedEra) : timelineEras)" :key="era.name">
+                    <!-- 年号标题 -->
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-base font-semibold text-[var(--vermilion)]">{{ era.name }}</h4>
+                        <span class="text-xs text-[var(--ink-gray)]">共 {{ era.samples.length }} 条</span>
+                    </div>
+                    <!-- 墓志列表 -->
+                    <div class="space-y-1">
+                        <div v-for="item in getPaginatedSamples(era.samples, getCurrentPage(era.name))" :key="item.id"
+                            class="flex items-center gap-3 p-2 border-b border-[var(--paper-dark)] hover:bg-[var(--paper-old)] cursor-pointer transition-colors"
+                            @click="openDetailFromTimeline(item)">
+                            <span class="text-xs text-[var(--ink-gray)]" style="font-family: monospace;">
+                                {{ item.serial_num }}
+                            </span>
+                            <span class="text-[var(--stone-green)]">{{ item.name }}</span>
+                        </div>
+                    </div>
+                    <!-- 分页控件 -->
+                    <div v-if="getTotalPages(era.name) > 1" class="flex justify-center gap-2 mt-3">
+                        <button @click="goToTimelinePage(era.name, getCurrentPage(era.name) - 1)"
+                            :disabled="getCurrentPage(era.name) <= 1"
+                            class="px-2 py-1 text-xs border border-[var(--paper-dark)] rounded hover:bg-[var(--paper-old)] disabled:opacity-30 disabled:cursor-not-allowed">
+                            上一页
+                        </button>
+                        <span class="px-2 py-1 text-xs text-[var(--ink-gray)]">
+                            第 {{ getCurrentPage(era.name) }} / {{ getTotalPages(era.name) }} 页
+                        </span>
+                        <button @click="goToTimelinePage(era.name, getCurrentPage(era.name) + 1)"
+                            :disabled="getCurrentPage(era.name) >= getTotalPages(era.name)"
+                            class="px-2 py-1 text-xs border border-[var(--paper-dark)] rounded hover:bg-[var(--paper-old)] disabled:opacity-30 disabled:cursor-not-allowed">
+                            下一页
+                        </button>
+                    </div>
                 </div>
-                <div v-if="flatTimelineInscriptions().length === 0"
+                <div v-if="timelineEras.length === 0"
                     class="text-center py-8 text-[var(--ink-gray)]">
                     暂无墓志
                 </div>
@@ -850,6 +875,8 @@
                 const timelineLoading = ref(false)
                 const allEras = ref([])
                 const selectedEra = ref('')
+                const currentTimelinePage = ref({})
+                const ITEMS_PER_PAGE = 15
                 let frequencyCharts = {}
 
                 onMounted(async () => {
@@ -902,14 +929,10 @@
                 const loadTimeline = async () => {
                     timelineLoading.value = true
                     try {
-                        const [timelineRes, erasRes] = await Promise.all([
-                            fetch('/api/timeline?include_all=true'),
-                            fetch('/api/eras')
-                        ])
+                        const timelineRes = await fetch('/api/timeline?include_all=true&page_size=200')
                         const timelineData = await timelineRes.json()
-                        const erasData = await erasRes.json()
                         timelineEras.value = timelineData.eras || []
-                        allEras.value = erasData.eras || []
+                        allEras.value = timelineData.eras.map(e => e.name) || []
                     } catch (error) {
                         console.error('Error loading timeline:', error)
                     } finally {
@@ -934,6 +957,31 @@
                         }
                     }
                     return inscriptions
+                }
+
+                // 分页辅助函数
+                const getPaginatedSamples = (samples, page) => {
+                    const start = (page - 1) * ITEMS_PER_PAGE
+                    return samples.slice(start, start + ITEMS_PER_PAGE)
+                }
+
+                const getTotalPages = (eraName) => {
+                    const era = timelineEras.value.find(e => e.name === eraName)
+                    if (!era) return 1
+                    return Math.ceil(era.samples.length / ITEMS_PER_PAGE) || 1
+                }
+
+                const getCurrentPage = (eraName) => {
+                    return currentTimelinePage.value[eraName] || 1
+                }
+
+                const goToTimelinePage = (eraName, page) => {
+                    const totalPages = getTotalPages(eraName)
+                    if (page < 1 || page > totalPages) return
+                    currentTimelinePage.value = {
+                        ...currentTimelinePage.value,
+                        [eraName]: page
+                    }
                 }
 
                 const filterByEra = () => {
@@ -1138,6 +1186,10 @@
                     flatTimelineInscriptions,
                     allEras,
                     selectedEra,
+                    getPaginatedSamples,
+                    getTotalPages,
+                    getCurrentPage,
+                    goToTimelinePage,
                     openTranscriptInNewTab,
                     openDetail: (item) => {
                         selectedItem.value = item

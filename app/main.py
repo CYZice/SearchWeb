@@ -273,12 +273,6 @@ def get_timeline(
     return result
 
 
-@app.get("/api/eras")
-def get_eras(db: Session = Depends(get_db)):
-    """获取所有不重复的年号列表"""
-    eras = crud.get_all_eras(db)
-    return {"eras": eras}
-
 
 @app.get("/api/inscriptions/by-era/{era_name}")
 def get_inscriptions_by_era(era_name: str, db: Session = Depends(get_db)):
