@@ -159,7 +159,7 @@ def extract_era_name(era_str: str):
 
     # 特殊处理"期間"（不以年结尾）
     if era_clean.endswith('間') and not era_clean.endswith('月間'):
-        return era_clean
+        return era_clean[:-1].strip()
 
     # 找到最后一个"年"标记
     last_year_pos = -1
