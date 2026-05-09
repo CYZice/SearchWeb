@@ -612,11 +612,11 @@
                 </div>
                 <div v-else>
                     <!-- 官称词频：双图表上下排列 -->
-                    <div v-if="frequencySource === 'official-titles'" class="grid grid-cols-2 gap-4">
-                        <div>
+                    <div v-if="frequencySource === 'official-titles'" class="flex flex-col gap-4">
+                        <div class="w-full">
                             <div id="frequencyChartSouth" style="height: 400px;"></div>
                         </div>
-                        <div>
+                        <div class="w-full">
                             <div id="frequencyChartNorth" style="height: 400px;"></div>
                         </div>
                     </div>
@@ -804,7 +804,7 @@
                             <h4
                                 class="text-sm font-semibold text-[var(--vermilion)] mb-2 border-l-2 border-[var(--vermilion)] pl-2 flex justify-between items-center">
                                 <span>誌文</span>
-                                <span @click="openTranscriptInNewTab(selectedItem.id)" class="text-xs text-[var(--ink-gray)] cursor-pointer hover:text-[var(--vermilion)]">新窗口打开 ↗</span>
+                                <span @click="openTranscriptInNewTab(selectedItem.id)" class="text-xs text-[var(--ink-gray)] cursor-pointer hover:text-[var(--vermilion)]">全屏查看 ↗</span>
                             </h4>
                             <div class="bg-[var(--paper-white)] p-4 border border-[var(--paper-dark)] font-serif leading-relaxed text-lg"
                                 style="font-family: 'STKaiti', 'KaiTi', serif; white-space: pre-wrap;"
@@ -1032,7 +1032,7 @@
                     }
                 }
 
-                const renderFrequencyChart = (frequencies, title = '词频统计 Top 15', domId = 'frequencyChart') => {
+                const renderFrequencyChart = (frequencies, title = '南/北面官制度词汇统计 Top 15', domId = 'frequencyChart') => {
                     // 销毁旧图表实例避免内存泄漏
                     if (frequencyCharts[domId]) {
                         frequencyCharts[domId].dispose()
@@ -1069,8 +1069,8 @@
                             axisPointer: { type: 'shadow' }
                         },
                         grid: {
-                            left: 140,
-                            right: 80,
+                            left: 120,
+                            right: 60,
                             bottom: '3%',
                             containLabel: true
                         },
