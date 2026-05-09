@@ -585,7 +585,7 @@
                     <span class="text-sm text-[var(--ink-gray)]">数据源：</span>
                     <span class="datasource-tag" :class="{ selected: frequencySource === 'inscriptions' }"
                         @click="switchFrequencySource('inscriptions')">
-                        碑文词频
+                        墓志词频
                     </span>
                     <span class="datasource-tag" :class="{ selected: frequencySource === 'official-titles' }"
                         @click="switchFrequencySource('official-titles')">
@@ -612,17 +612,15 @@
                 </div>
                 <div v-else>
                     <!-- 官称词频：双图表上下排列 -->
-                    <div v-if="frequencySource === 'official-titles'" class="flex flex-col gap-4">
+                    <div v-if="frequencySource === 'official-titles'" class="grid grid-cols-2 gap-4">
                         <div>
-                            <h4 class="text-center text-sm font-semibold mb-2 text-[var(--ink-gray)]">南面官</h4>
                             <div id="frequencyChartSouth" style="height: 400px;"></div>
                         </div>
                         <div>
-                            <h4 class="text-center text-sm font-semibold mb-2 text-[var(--ink-gray)]">北面官</h4>
                             <div id="frequencyChartNorth" style="height: 400px;"></div>
                         </div>
                     </div>
-                    <!-- 碑文词频：单图表 -->
+                    <!-- 墓志词频：单图表 -->
                     <div v-else id="frequencyChart" style="height: 400px;"></div>
                 </div>
             </div>
@@ -1009,8 +1007,8 @@
                             const [southData, northData] = await Promise.all([southRes.json(), northRes.json()])
                             await nextTick()
                             setTimeout(() => {
-                                renderFrequencyChart(southData.frequencies, '南面官 Top 15', 'frequencyChartSouth')
-                                renderFrequencyChart(northData.frequencies, '北面官 Top 15', 'frequencyChartNorth')
+                                renderFrequencyChart(southData.frequencies, '南面官', 'frequencyChartSouth')
+                                renderFrequencyChart(northData.frequencies, '北面官', 'frequencyChartNorth')
                             }, 300)
                         } catch (error) {
                             console.error('Error loading official titles frequencies:', error)
@@ -1020,7 +1018,7 @@
                         return
                     }
 
-                    // 碑文词频
+                    // 墓志词频
                     frequenciesLoading.value = true
                     try {
                         const response = await fetch('/api/frequencies?top_n=15')
@@ -1078,7 +1076,6 @@
                         },
                         xAxis: {
                             type: 'value',
-                            name: '出现次数',
                             axisLabel: { fontSize: 11, fontFamily: 'Noto Serif SC' }
                         },
                         yAxis: {
@@ -1089,11 +1086,9 @@
                                 fontWeight: 600,
                                 color: '#2C2C2C',
                                 fontFamily: 'Noto Serif SC'
-                            },
-                            name: '词语'
+                            }
                         },
                         series: [{
-                            name: '出现次数',
                             type: 'bar',
                             data: xData,
                             barWidth: 10,
