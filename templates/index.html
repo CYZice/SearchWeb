@@ -1039,14 +1039,15 @@
                                 fetch('/api/frequencies/official-titles?top_n=15&type=north')
                             ])
                             const [southData, northData] = await Promise.all([southRes.json(), northRes.json()])
-                            await nextTick()
                             // 确保 DOM 完全渲染后再绘制图表
+                            await nextTick()
+                            await nextTick()
                             await nextTick()
                             setTimeout(() => {
                                 renderFrequencyChart(southData.frequencies, '南面官', 'frequencyChartSouth')
                                 renderFrequencyChart(northData.frequencies, '北面官', 'frequencyChartNorth')
                                 frequenciesLoading.value = false  // 图表渲染完成后关闭 loading
-                            }, 100)
+                            }, 500)
                         } catch (error) {
                             console.error('Error loading official titles frequencies:', error)
                             frequenciesLoading.value = false
