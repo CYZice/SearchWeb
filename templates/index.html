@@ -1040,10 +1040,12 @@
                             ])
                             const [southData, northData] = await Promise.all([southRes.json(), northRes.json()])
                             await nextTick()
+                            // 确保 DOM 完全渲染后再绘制图表
+                            await nextTick()
                             setTimeout(() => {
                                 renderFrequencyChart(southData.frequencies, '南面官', 'frequencyChartSouth')
                                 renderFrequencyChart(northData.frequencies, '北面官', 'frequencyChartNorth')
-                            }, 300)
+                            }, 100)
                         } catch (error) {
                             console.error('Error loading official titles frequencies:', error)
                         } finally {
