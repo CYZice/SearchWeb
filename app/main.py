@@ -87,7 +87,7 @@ def search(
     q: str,
     fields: Optional[List[str]] = Query(None),
     page: int = Query(1, ge=1),
-    size: int = Query(15, ge=1, le=100),
+    size: int = Query(15, ge=1, le=2000),
     sort_by: Optional[str] = Query(None, description="Sort field: id, name, era, serial_num"),
     sort_order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
     db: Session = Depends(get_db),
