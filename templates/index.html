@@ -1094,16 +1094,6 @@
                         frequencyCharts[domId] = echarts.init(chartDom)
 
                         frequencyCharts[domId].setOption({
-                        title: {
-                            text: title,
-                            left: 'center',
-                            textStyle: {
-                                fontSize: 16,
-                                fontFamily: 'Noto Serif SC',
-                                fontWeight: '600',
-                                color: '#2C2C2C'
-                            }
-                        },
                         tooltip: {
                             trigger: 'axis',
                             axisPointer: { type: 'shadow' }
@@ -1112,6 +1102,8 @@
                             left: 120,
                             right: 60,
                             bottom: '3%',
+                            containLabel: true
+                        },
                             containLabel: true
                         },
                         xAxis: {
