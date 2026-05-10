@@ -611,6 +611,31 @@
                     <p class="mt-4 text-[var(--ink-gray)]">正在加载数据...</p>
                 </div>
                 <div v-else>
+                    <!-- 官称词频：检索框 -->
+                    <div v-if="frequencySource === 'official-titles'" class="mb-4">
+                        <div class="flex gap-2 items-center">
+                            <input
+                                v-model="officialTitleSearch"
+                                @keyup.enter="searchOfficialTitle"
+                                type="text"
+                                class="search-input flex-grow"
+                                placeholder="输入官称词汇检索，如：节度使"
+                            >
+                            <button @click="searchOfficialTitle" class="btn-search" :disabled="officialTitleLoading">
+                                <span v-if="officialTitleLoading">检索中...</span>
+                                <span v-else>检索</span>
+                            </button>
+                        </div>
+                        <div v-if="officialTitleLoading" class="mt-3 text-sm text-[var(--ink-gray)]">正在检索...</div>
+                        <div v-else-if="officialTitleResult" class="mt-3 p-3 bg-[var(--paper-old)] rounded">
+                            <p v-if="officialTitleResult.error" class="text-sm text-red-600">{{ officialTitleResult.error }}</p>
+                            <template v-else>
+                                <p class="text-sm">官称: <strong>{{ officialTitleResult.word }}</strong></p>
+                                <p class="text-sm">出现次数: <strong>{{ officialTitleResult.count }}</strong></p>
+                                <p v-if="officialTitleResult.era" class="text-sm">时代: <strong>{{ officialTitleResult.era }}</strong></p>
+                            </template>
+                        </div>
+                    </div>
                     <!-- 官称词频：双图表上下排列 -->
                     <div v-if="frequencySource === 'official-titles'" class="flex flex-col gap-4">
                         <div class="w-full">
@@ -878,6 +903,9 @@
                 const selectedEra = ref('')
                 const currentTimelinePage = ref({})
                 const ITEMS_PER_PAGE = 15
+                const officialTitleSearch = ref('')
+                const officialTitleResult = ref(null)
+                const officialTitleLoading = ref(false)
                 let frequencyCharts = {}
 
                 onMounted(async () => {
@@ -1117,6 +1145,33 @@
                             }
                         }]
                     })
+                }
+
+                const searchOfficialTitle = () => {
+                    if (!officialTitleSearch.value.trim()) return
+                    officialTitleResult.value = null  // 清空旧结果
+                    officialTitleLoading.value = true  // 显示加载状态
+                    const searchParams = new URLSearchParams()
+                    searchParams.append('word', officialTitleSearch.value)
+                    if (selectedEra.value) {
+                        searchParams.append('era', selectedEra.value)
+                    }
+                    const searchUrl = `/api/frequencies/official-titles/search?${searchParams.toString()}`
+                    fetch(searchUrl)
+                        .then(res => {
+                            if (!res.ok) throw new Error('Network response was not ok')
+                            return res.json()
+                        })
+                        .then(data => {
+                            officialTitleResult.value = data
+                        })
+                        .catch(error => {
+                            console.error('Error searching official title:', error)
+                            officialTitleResult.value = { word: officialTitleSearch.value, count: 0, error: '检索失败，请重试', variants: [] }
+                        })
+                        .finally(() => {
+                            officialTitleLoading.value = false
+                        })
                 }
 
                 const performSearch = async (page = 1) => {
