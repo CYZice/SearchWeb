@@ -438,6 +438,8 @@
                 <button class="btn" onclick="searchData()">搜索</button>
             </div>
             <div class="selection-toolbar">
+                <input type="checkbox" id="select-all-pages" onchange="toggleSelectAllPages(this.checked)" style="margin-right: 5px;">
+                <label for="select-all-pages" style="margin-right: 10px; font-size: 12px;">全选所有页</label>
                 <span class="selection-info" id="selection-info">已选择 0 条</span>
                 <button class="btn btn-small btn-danger" id="batch-delete-btn" onclick="deleteSelectedItems()" disabled>删除选中</button>
             </div>
@@ -708,6 +710,51 @@
         let currentSort = { field: 'id', order: 'asc' };
         let selectedIds = new Set();
         let currentPageIds = [];
+        let selectAllPages = false;
+
+        function clearSelection() {
+            selectedIds.clear();
+            selectAllPages = false;
+            document.getElementById('select-all-pages').checked = false;
+            updateSelectionUI();
+        }
+
+        async function toggleSelectAllPages(checked) {
+            selectAllPages = checked;
+            if (checked) {
+                selectedIds.clear();
+                await fetchAllIds();
+            } else {
+                selectedIds.clear();
+            }
+            updateSelectionUI();
+        }
+
+        async function fetchAllIds() {
+            let page = 1;
+            let hasMore = true;
+            const batchSize = 500;
+            showLoading(true);
+            try {
+                while (hasMore) {
+                    const response = await fetch(`/api/search?q=${encodeURIComponent(currentQuery)}&page=${page}&size=${batchSize}&sort_by=id&sort_order=asc`);
+                    const data = await response.json();
+                    const items = data.items || [];
+                    if (items.length > 0) {
+                        items.forEach(item => selectedIds.add(item.id));
+                        page++;
+                        hasMore = items.length === batchSize;
+                    } else {
+                        hasMore = false;
+                    }
+                    document.getElementById('selection-info').textContent = `已选择 ${selectedIds.size} 条（加载中...）`;
+                }
+            } catch (e) {
+                console.error('Error fetching all IDs:', e);
+            } finally {
+                showLoading(false);
+            }
+        }
 
         async function searchData() {
             currentQuery = document.getElementById('maintain-search').value;
@@ -806,7 +853,11 @@
         async function deleteSelectedItems() {
             const ids = Array.from(selectedIds);
             if (ids.length === 0) return;
-            if (!confirm(`确定删除选中的 ${ids.length} 条记录吗？此操作不可恢复。`)) return;
+
+            const msg = selectAllPages
+                ? `确定删除全部 ${ids.length} 条记录吗？此操作不可恢复。`
+                : `确定删除选中的 ${ids.length} 条记录吗？此操作不可恢复。`;
+            if (!confirm(msg)) return;
 
             showLoading(true);
             try {
