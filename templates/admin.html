@@ -190,6 +190,28 @@
             background-color: #f2f2f2;
         }
 
+        .selection-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            background: #fafafa;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .selection-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .select-col {
+            width: 42px;
+            text-align: center !important;
+        }
+
         /* Loading Overlay */
         .loading-overlay {
             position: fixed;
@@ -415,9 +437,16 @@
                 <input type="text" id="maintain-search" class="search-input" placeholder="输入器名或编号搜索...">
                 <button class="btn" onclick="searchData()">搜索</button>
             </div>
+            <div class="selection-toolbar">
+                <span class="selection-info" id="selection-info">已选择 0 条</span>
+                <button class="btn btn-small btn-danger" id="batch-delete-btn" onclick="deleteSelectedItems()" disabled>删除选中</button>
+            </div>
             <table class="data-table">
                 <thead>
                     <tr>
+                        <th class="select-col">
+                            <input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)" aria-label="全选当前页">
+                        </th>
                         <th class="sortable" onclick="toggleSort('id')">ID</th>
                         <th class="sortable" onclick="toggleSort('name')">器名</th>
                         <th class="sortable" onclick="toggleSort('era')">时代</th>
@@ -677,11 +706,14 @@
         let totalCount = 0;
         let currentQuery = '';
         let currentSort = { field: 'id', order: 'asc' };
+        let selectedIds = new Set();
+        let currentPageIds = [];
 
         async function searchData() {
             currentQuery = document.getElementById('maintain-search').value;
+            clearSelection();
             const tbody = document.getElementById('data-list');
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">加载中...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">加载中...</td></tr>';
 
             try {
                 const url = `/api/search?q=${encodeURIComponent(currentQuery)}&page=${currentPage}&size=${currentSize}&sort_by=${currentSort.field}&sort_order=${currentSort.order}`;
@@ -689,10 +721,11 @@
                 const data = await response.json();
                 const results = data.items || [];
                 totalCount = data.total || 0;
+                currentPageIds = results.map(item => item.id);
 
                 tbody.innerHTML = '';
                 if (results.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">无数据</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">无数据</td></tr>';
                     document.getElementById('pagination').innerHTML = '';
                     return;
                 }
@@ -700,6 +733,9 @@
                 results.forEach(item => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
+                    <td class="select-col">
+                        <input type="checkbox" class="row-select" value="${item.id}" onchange="toggleItemSelection(${item.id}, this.checked)" aria-label="选择 ID ${item.id}">
+                    </td>
                     <td>${item.id}</td>
                     <td><a href="/api/inscriptions/${item.id}" target="_blank">${item.name}</a></td>
                     <td>${item.era || '-'}</td>
@@ -712,8 +748,87 @@
                 });
 
                 renderPagination();
+                updateSelectionUI();
             } catch (e) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">加载失败</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">加载失败</td></tr>';
+            }
+        }
+
+        function clearSelection() {
+            selectedIds.clear();
+            currentPageIds = [];
+            updateSelectionUI();
+        }
+
+        function toggleItemSelection(id, checked) {
+            if (checked) {
+                selectedIds.add(id);
+            } else {
+                selectedIds.delete(id);
+            }
+            updateSelectionUI();
+        }
+
+        function toggleSelectAll(checked) {
+            currentPageIds.forEach(id => {
+                if (checked) {
+                    selectedIds.add(id);
+                } else {
+                    selectedIds.delete(id);
+                }
+            });
+
+            document.querySelectorAll('.row-select').forEach(checkbox => {
+                checkbox.checked = checked;
+            });
+            updateSelectionUI();
+        }
+
+        function updateSelectionUI() {
+            const count = selectedIds.size;
+            const info = document.getElementById('selection-info');
+            const button = document.getElementById('batch-delete-btn');
+            const selectAll = document.getElementById('select-all');
+
+            if (info) {
+                info.textContent = `已选择 ${count} 条`;
+            }
+            if (button) {
+                button.disabled = count === 0;
+            }
+            if (selectAll) {
+                const selectedOnPage = currentPageIds.filter(id => selectedIds.has(id)).length;
+                selectAll.checked = currentPageIds.length > 0 && selectedOnPage === currentPageIds.length;
+                selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < currentPageIds.length;
+            }
+        }
+
+        async function deleteSelectedItems() {
+            const ids = Array.from(selectedIds);
+            if (ids.length === 0) return;
+            if (!confirm(`确定删除选中的 ${ids.length} 条记录吗？此操作不可恢复。`)) return;
+
+            showLoading(true);
+            try {
+                const response = await fetch('/api/inscriptions/batch-delete', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    const missingCount = (result.not_found_ids || []).length;
+                    const suffix = missingCount > 0 ? `，${missingCount} 条未找到` : '';
+                    alert(`已删除 ${result.deleted} 条${suffix}`);
+                    searchData();
+                } else {
+                    alert('批量删除失败: ' + (result.detail || '未知错误'));
+                }
+            } catch (e) {
+                alert('网络错误，批量删除失败');
+            } finally {
+                showLoading(false);
             }
         }
 

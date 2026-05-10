@@ -184,6 +184,45 @@ def update_inscription(
     return updated
 
 
+@app.delete("/api/inscriptions/batch-delete")
+def batch_delete_inscriptions(data: dict, db: Session = Depends(get_db)):
+    inscription_ids = data.get("ids")
+    if not isinstance(inscription_ids, list) or not inscription_ids:
+        raise HTTPException(status_code=400, detail="ids must be a non-empty list")
+
+    valid_ids = []
+    invalid_ids = []
+    for item in inscription_ids:
+        try:
+            valid_ids.append(int(item))
+        except (TypeError, ValueError):
+            invalid_ids.append(item)
+
+    if not valid_ids:
+        raise HTTPException(status_code=400, detail="ids must contain valid integers")
+
+    unique_ids = sorted(set(valid_ids))
+    db_objs = (
+        db.query(models.Inscription)
+        .filter(models.Inscription.id.in_(unique_ids))
+        .all()
+    )
+    found_ids = {item.id for item in db_objs}
+    not_found_ids = [item_id for item_id in unique_ids if item_id not in found_ids]
+
+    for db_obj in db_objs:
+        db.delete(db_obj)
+    db.commit()
+
+    return {
+        "status": "success",
+        "deleted": len(db_objs),
+        "deleted_ids": sorted(found_ids),
+        "not_found_ids": not_found_ids,
+        "invalid_ids": invalid_ids,
+    }
+
+
 @app.delete("/api/inscriptions/{inscription_id}")
 def delete_inscription(inscription_id: int, db: Session = Depends(get_db)):
     db_obj = crud.get_inscription(db, inscription_id)
