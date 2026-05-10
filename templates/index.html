@@ -1075,22 +1075,32 @@
                         frequencyCharts[domId].dispose()
                         delete frequencyCharts[domId]
                     }
-                    const chartDom = document.getElementById(domId)
-                    if (!chartDom) {
-                        console.error(domId + ' DOM not found')
-                        return
-                    }
-                    const yData = frequencies.map(f => f.word).reverse()
-                    const xData = frequencies.map(f => f.count).reverse()
 
-                    // 类目越多时提升容器高度，避免固定柱宽导致挤压重叠
-                    const minHeight = 400
-                    const rowHeight = 28
-                    chartDom.style.height = `${Math.max(minHeight, yData.length * rowHeight)}px`
+                    // 等待 DOM 出现的轮询机制
+                    let retries = 20
+                    const tryRender = () => {
+                        const chartDom = document.getElementById(domId)
+                        if (!chartDom) {
+                            if (retries > 0) {
+                                retries--
+                                setTimeout(tryRender, 50)
+                                return
+                            }
+                            console.error(domId + ' DOM not found after retries')
+                            return
+                        }
 
-                    frequencyCharts[domId] = echarts.init(chartDom)
+                        const yData = frequencies.map(f => f.word).reverse()
+                        const xData = frequencies.map(f => f.count).reverse()
 
-                    frequencyCharts[domId].setOption({
+                        // 类目越多时提升容器高度，避免固定柱宽导致挤压重叠
+                        const minHeight = 400
+                        const rowHeight = 28
+                        chartDom.style.height = `${Math.max(minHeight, yData.length * rowHeight)}px`
+
+                        frequencyCharts[domId] = echarts.init(chartDom)
+
+                        frequencyCharts[domId].setOption({
                         title: {
                             text: title,
                             left: 'center',
@@ -1148,6 +1158,10 @@
                             }
                         }]
                     })
+                    }
+
+                    // 开始等待并渲染
+                    tryRender()
                 }
 
                 const searchOfficialTitle = () => {
