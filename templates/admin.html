@@ -600,13 +600,19 @@
                 data.skipped_items.forEach(item => {
                     const li = document.createElement('li');
                     li.className = 'conflict-item';
+                    const overwriteButton = item.existing_id
+                        ? `<button class="btn btn-small btn-danger" onclick="overwriteItem(${item.existing_id}, '${item.conflict_token || ''}', '${encodeURIComponent(JSON.stringify(item.new_data || {}))}')">Overwrite</button>`
+                        : '';
+                    /*
+                        ? `<button class="btn btn-small btn-danger" onclick="overwriteItem(${item.existing_id}, '${item.conflict_token || ''}', '${encodeURIComponent(JSON.stringify(item.new_data || {}))}')">å¯®å“„åŸ—ç‘•å—™æ´Š</button>`
+                    */
                     li.innerHTML = `
                     <div>
                         <strong>${item.name}</strong> <small>(${item.source_file || '未知来源'})</small><br>
                         <span style="color: #666; font-size: 12px;">数据库ID: ${item.existing_id} | 原因: ${item.reason}</span>
                     </div>
                     <div>
-                        <button class="btn btn-small btn-danger" onclick="overwriteItem(${item.existing_id}, '${encodeURIComponent(JSON.stringify(item.new_data || {}))}')">强制覆盖</button>
+                        ${overwriteButton}
                     </div>
                 `;
                     conflictList.appendChild(li);
@@ -632,19 +638,21 @@
             }
         }
 
-        async function overwriteItem(id, encodedData) {
+        async function overwriteItem(id, conflictToken, encodedData) {
             if (!confirm('确定要用新数据覆盖这条记录吗？此操作不可恢复。')) return;
 
-            const newData = JSON.parse(decodeURIComponent(encodedData));
+            const payload = { existing_id: id };
+            if (conflictToken) {
+                payload.conflict_token = conflictToken;
+            } else {
+                payload.new_data = JSON.parse(decodeURIComponent(encodedData));
+            }
             showLoading(true);
             try {
                 const response = await fetch('/api/inscriptions/overwrite', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        existing_id: id,
-                        new_data: newData
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 if (response.ok) {

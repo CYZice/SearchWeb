@@ -1,0 +1,38 @@
+# Git / editor metadata
+.git/
+.gitignore
+.claude/
+.vscode/
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Runtime data and uploaded/generated assets
+data/
+temp_uploads/
+app/static/images/
+
+# Large source documents and local exports
+**/*.doc
+**/*.docx
+**/*.zip
+**/*.tar
+**/*.tar.gz
+**/*.7z
+**/*.rar
+*.db
+*.sqlite
+*.sqlite3
+
+# Local logs and OS files
+*.log
+.DS_Store
+Thumbs.db

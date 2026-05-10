@@ -1,24 +1,19 @@
-# Use an official Python runtime as a parent image
 FROM python:3.9-slim
 
-# Set the working directory in the container
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
-# Copy the requirements file into the container
 COPY requirements.txt .
-
-# Install any needed packages specified in requirements.txt
-# 使用国内镜像源加速
 RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
-# Copy the rest of the application code
 COPY . .
 
-# Create directory for data if it doesn't exist (though volume mount will handle it)
-RUN mkdir -p data app/static/images
+# Runtime data is mounted by docker-compose; create empty mount points only.
+RUN mkdir -p data app/static/images app/static/images/chars temp_uploads/conflicts
 
-# Make port 8000 available to the world outside this container
 EXPOSE 8000
 
-# Run app.main:app when the container launches
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

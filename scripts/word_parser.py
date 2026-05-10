@@ -3,6 +3,7 @@ import re
 import json
 import sys
 import hashlib
+import uuid
 from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from app.database import engine, SessionLocal
 RAW_DOCS_DIR = "data/raw_word"
 IMAGES_DIR = "app/static/images"
 CHAR_IMAGES_DIR = "app/static/images/chars"
+CONFLICTS_DIR = "temp_uploads/conflicts"
 # Ensure we use the correct path separator for URLs (forward slash)
 IMAGE_URL_PREFIX = "/static/images/"
 CHAR_IMAGE_URL_PREFIX = "/static/images/chars/"
@@ -101,17 +103,20 @@ def get_images_from_run(run, doc):
     return images
 
 
-def save_image(image_part, serial_num, index):
-    """
-    Save image part to disk and return relative URL.
-    """
-    # Determine extension
-    content_type = image_part.content_type
+def get_image_extension(content_type):
     ext = "jpg"
     if "png" in content_type:
         ext = "png"
     elif "jpeg" in content_type:
         ext = "jpg"
+    return ext
+
+
+def save_image(content, content_type, serial_num, index):
+    """
+    Save image bytes to disk and return relative URL.
+    """
+    ext = get_image_extension(content_type)
 
     # Clean serial num for filename (remove brackets)
     clean_serial = re.sub(r"[^\w]", "", serial_num)
@@ -121,32 +126,27 @@ def save_image(image_part, serial_num, index):
     filename = f"{clean_serial}_{index}.{ext}"
     filepath = os.path.join(IMAGES_DIR, filename)
 
+    os.makedirs(IMAGES_DIR, exist_ok=True)
     with open(filepath, "wb") as f:
-        f.write(image_part.blob)
+        f.write(content)
 
     return f"{IMAGE_URL_PREFIX}{filename}"
 
 
-def save_char_image(image_part):
+def save_char_image(content, content_type):
     """
     Save small character image based on content hash to avoid duplicates.
     """
-    content = image_part.blob
     # Calculate MD5 hash
     md5_hash = hashlib.md5(content).hexdigest()
 
-    # Determine extension
-    content_type = image_part.content_type
-    ext = "jpg"
-    if "png" in content_type:
-        ext = "png"
-    elif "jpeg" in content_type:
-        ext = "jpg"
+    ext = get_image_extension(content_type)
 
     filename = f"{md5_hash}.{ext}"
     filepath = os.path.join(CHAR_IMAGES_DIR, filename)
 
     # Only write if doesn't exist
+    os.makedirs(CHAR_IMAGES_DIR, exist_ok=True)
     if not os.path.exists(filepath):
         with open(filepath, "wb") as f:
             f.write(content)
@@ -154,14 +154,50 @@ def save_char_image(image_part):
     return f"{CHAR_IMAGE_URL_PREFIX}{filename}"
 
 
-def parse_docx(file_path):
+def conflict_path(token):
+    return os.path.join(CONFLICTS_DIR, f"{token}.json")
+
+
+def save_conflict_record(record):
+    os.makedirs(CONFLICTS_DIR, exist_ok=True)
+    token = uuid.uuid4().hex
+    with open(conflict_path(token), "w", encoding="utf-8") as f:
+        json.dump(record, f, ensure_ascii=False)
+    return token
+
+
+def load_conflict_record(token):
+    if not token or not re.match(r"^[0-9a-f]{32}$", token):
+        return None
+    path = conflict_path(token)
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def delete_conflict_record(token):
+    if not token:
+        return
+    path = conflict_path(token)
+    if os.path.exists(path):
+        os.remove(path)
+
+
+def finalize_record(record):
+    if record and "image_list" in record:
+        record["image_url"] = json.dumps(record["image_list"])
+        del record["image_list"]
+    return record
+
+
+def iter_docx_records(file_path):
     """
     Parse a Word document and return a list of inscription dictionaries.
     Does NOT save to database.
     """
     doc = Document(file_path)
 
-    records = []
     current_record = None
     current_field = None
     image_counter = 1
@@ -172,17 +208,6 @@ def parse_docx(file_path):
     # Regex for field: Key: Value (restrict key length to avoid matching long texts with colons)
     field_pattern = re.compile(r"^([^，。；：！？\s：:]{1,10})[\s]*[：:](.*)")
 
-    def finalize_record():
-        nonlocal current_record
-        if current_record:
-            # Convert image_list to JSON string
-            if "image_list" in current_record:
-                current_record["image_url"] = json.dumps(current_record["image_list"])
-                del current_record["image_list"]
-
-            records.append(current_record)
-            current_record = None
-
     for para in doc.paragraphs:
         # Get raw text for pattern matching
         raw_text = para.text.strip()
@@ -190,7 +215,8 @@ def parse_docx(file_path):
         # 1. Check for New Record Start
         match = record_pattern.match(raw_text)
         if match:
-            finalize_record()
+            if current_record:
+                yield finalize_record(current_record)
 
             serial_num_str = match.group(0)  # e.g., 【017】
 
@@ -214,15 +240,17 @@ def parse_docx(file_path):
             # Check for images in this run
             images = get_images_from_run(run, doc)
             for img_part in images:
+                content = img_part.blob
+                content_type = img_part.content_type
                 # Check size: If < 50KB (51200 bytes), treat as char image
-                if len(img_part.blob) < 51200:
-                    url = save_char_image(img_part)
+                if len(content) < 51200:
+                    url = save_char_image(content, content_type)
                     # Insert img tag inline
                     para_html_content += f'<img src="{url}" class="inline-char" style="height: 1.2em; vertical-align: middle;" />'
                 else:
                     # Treat as inscription image
                     url = save_image(
-                        img_part, current_record["serial_num"], image_counter
+                        content, content_type, current_record["serial_num"], image_counter
                     )
                     current_record["image_list"].append(url)
                     image_counter += 1
@@ -278,13 +306,19 @@ def parse_docx(file_path):
                 else:
                     current_record[current_field] += "\n" + para_html_content
 
-    # Save last record
-    finalize_record()
-
-    return records
+    if current_record:
+        yield finalize_record(current_record)
 
 
-def process_import(file_path: str, db: Session):
+def parse_docx(file_path):
+    """
+    Parse a Word document and return a list of inscription dictionaries.
+    Does NOT save to database.
+    """
+    return list(iter_docx_records(file_path))
+
+
+def _process_import_legacy(file_path: str, db: Session):
     """
     Orchestrates the import process:
     1. Parse docx
@@ -367,6 +401,105 @@ def process_import(file_path: str, db: Session):
         "skipped": len(skipped_list),
         "skipped_items": skipped_list,
     }
+
+
+def process_import(file_path: str, db: Session, batch_size: int = 50):
+    """
+    Stream records from a Word document, check duplicate serial numbers, and
+    save records in small database batches.
+    """
+    try:
+        if os.path.basename(file_path).startswith("~$"):
+            return {
+                "success": 0,
+                "skipped": 0,
+                "errors": [
+                    f"{os.path.basename(file_path)} is a temporary Word file and was skipped."
+                ],
+            }
+
+        success_count = 0
+        skipped_list = []
+        seen_serials = set()
+        pending = []
+
+        def add_skip(record, reason, existing=None, include_token=False):
+            item = {
+                "serial_num": record.get("serial_num"),
+                "name": record.get("name"),
+                "reason": reason,
+            }
+            if existing is not None:
+                item["existing_id"] = existing.id
+            if include_token:
+                item["conflict_token"] = save_conflict_record(record)
+            skipped_list.append(item)
+
+        def flush_pending():
+            nonlocal success_count, pending
+            if not pending:
+                return
+
+            serials = [record["serial_num"] for record in pending]
+            existing_rows = (
+                db.query(Inscription)
+                .filter(Inscription.serial_num.in_(serials))
+                .all()
+            )
+            existing_by_serial = {row.serial_num: row for row in existing_rows}
+
+            for record in pending:
+                existing = existing_by_serial.get(record["serial_num"])
+                if existing:
+                    add_skip(
+                        record,
+                        "Duplicate Serial Number (in DB)",
+                        existing=existing,
+                        include_token=True,
+                    )
+                    continue
+
+                db.add(Inscription(**record))
+                success_count += 1
+
+            db.commit()
+            pending = []
+
+        for record in iter_docx_records(file_path):
+            serial_num = record.get("serial_num")
+            if not serial_num or not record.get("name"):
+                continue
+
+            if serial_num in seen_serials:
+                add_skip(record, "Duplicate Serial Number (in same document)")
+                continue
+
+            seen_serials.add(serial_num)
+            pending.append(record)
+            if len(pending) >= batch_size:
+                flush_pending()
+
+        flush_pending()
+
+        return {
+            "success": success_count,
+            "skipped": len(skipped_list),
+            "skipped_items": skipped_list,
+        }
+    except Exception as e:
+        import traceback
+
+        db.rollback()
+        traceback.print_exc()
+        if isinstance(e, PackageNotFoundError):
+            return {
+                "success": 0,
+                "skipped": 0,
+                "errors": [
+                    f"Invalid .docx file: {os.path.basename(file_path)}"
+                ],
+            }
+        return {"success": 0, "skipped": 0, "errors": [str(e)]}
 
 
 def main():

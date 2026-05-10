@@ -2,14 +2,17 @@ version: '3.8'
 
 services:
   inscription-app:
+    image: inscription-app:latest
     build:
       context: .
       dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      # Persist database file
-      - ./data/inscriptions.db:/app/data/inscriptions.db
-      # Persist images folder
+      # Persist SQLite database and imported data files
+      - ./data:/app/data
+      # Persist imported images
       - ./app/static/images:/app/app/static/images
+      # Persist temporary import conflict files
+      - ./temp_uploads:/app/temp_uploads
     restart: always

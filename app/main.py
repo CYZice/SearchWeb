@@ -134,10 +134,14 @@ async def admin_panel(request: Request):
 def overwrite_inscription(data: dict, db: Session = Depends(get_db)):
     """
     Overwrite an existing inscription with new data.
-    Input: { "existing_id": int, "new_data": dict }
+    Input: { "existing_id": int, "new_data": dict } or { "existing_id": int, "conflict_token": str }
     """
     existing_id = data.get("existing_id")
     new_data = data.get("new_data")
+    conflict_token = data.get("conflict_token")
+
+    if not new_data and conflict_token:
+        new_data = word_parser.load_conflict_record(conflict_token)
 
     if not existing_id or not new_data:
         raise HTTPException(status_code=400, detail="Missing existing_id or new_data")
@@ -153,6 +157,8 @@ def overwrite_inscription(data: dict, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(db_obj)
+    if conflict_token:
+        word_parser.delete_conflict_record(conflict_token)
 
     return {"status": "success", "id": db_obj.id, "name": db_obj.name}
 
