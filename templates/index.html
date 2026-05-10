@@ -613,6 +613,7 @@
                 <div v-else>
                     <!-- 官称词频：双图表上下排列 -->
                     <div v-if="frequencySource === 'official-titles'" class="flex flex-col gap-4">
+                        <h3 class="text-lg font-semibold text-[var(--ink-black)] text-center">南/北面官制度词汇统计 Top 15</h3>
                         <div class="w-full">
                             <div id="frequencyChartSouth" style="height: 400px;"></div>
                         </div>
@@ -621,7 +622,10 @@
                         </div>
                     </div>
                     <!-- 墓志词频：单图表 -->
-                    <div v-else id="frequencyChart" style="height: 400px;"></div>
+                    <div v-else>
+                        <h3 class="text-lg font-semibold text-[var(--ink-black)] text-center mb-4">墓志词频统计 Top 15</h3>
+                        <div id="frequencyChart" style="height: 400px;"></div>
+                    </div>
                 </div>
             </div>
         </div>
