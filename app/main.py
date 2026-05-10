@@ -237,6 +237,28 @@ def delete_inscription(inscription_id: int, db: Session = Depends(get_db)):
     return {"status": "success", "message": f"Inscription {inscription_id} deleted"}
 
 
+@app.post("/api/inscriptions")
+def create_inscription(data: dict, db: Session = Depends(get_db)):
+    """创建新的墓志记录"""
+    ALLOWED_FIELDS = {
+        "serial_num", "name", "era", "alias", "discovery",
+        "collection", "publication", "format", "image", "transcript", "image_url"
+    }
+    # 检查必填字段
+    if not data.get("name"):
+        raise HTTPException(status_code=400, detail="器名（name）为必填字段")
+    # 检查编号唯一性
+    if data.get("serial_num"):
+        existing = db.query(models.Inscription).filter(
+            models.Inscription.serial_num == data["serial_num"]
+        ).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="编号已存在")
+    # 过滤字段
+    create_data = {k: v for k, v in data.items() if k in ALLOWED_FIELDS}
+    return crud.create_inscription(db, create_data)
+
+
 @app.get("/api/wordcloud")
 def get_wordcloud(
     era: Optional[str] = Query(None, description="Filter by era (时代)"),

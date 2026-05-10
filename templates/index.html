@@ -613,7 +613,6 @@
                 <div v-else>
                     <!-- 官称词频：双图表上下排列 -->
                     <div v-if="frequencySource === 'official-titles'" class="flex flex-col gap-4">
-                        <h3 class="text-lg font-semibold text-[var(--ink-black)] text-center">南/北面官制度词汇统计 Top 15</h3>
                         <div class="w-full">
                             <div id="frequencyChartSouth" style="height: 400px;"></div>
                         </div>
@@ -1039,7 +1038,7 @@
                     }
                 }
 
-                const renderFrequencyChart = (frequencies, title = '南/北面官制度词汇统计 Top 15', domId = 'frequencyChart') => {
+                const renderFrequencyChart = (frequencies, title = '', domId = 'frequencyChart') => {
                     // 销毁旧图表实例避免内存泄漏
                     if (frequencyCharts[domId]) {
                         frequencyCharts[domId].dispose()
@@ -1151,7 +1150,11 @@
 
                 const goToPage = (page) => {
                     if (page >= 1 && page <= totalPages.value) {
-                        performSearch(page)
+                        if (!searchQuery.value.trim() && page === 1) {
+                            loadInitialResults()
+                        } else {
+                            performSearch(page)
+                        }
                         window.scrollTo({ top: 0, behavior: 'smooth' })
                     }
                 }

@@ -441,6 +441,7 @@
                 <input type="checkbox" id="select-all-pages" onchange="toggleSelectAllPages(this.checked)" style="margin-right: 5px;">
                 <label for="select-all-pages" style="margin-right: 10px; font-size: 12px;">全选所有页</label>
                 <span class="selection-info" id="selection-info">已选择 0 条</span>
+                <button class="btn btn-small" id="add-new-btn" onclick="openAddModal()">新增</button>
                 <button class="btn btn-small btn-danger" id="batch-delete-btn" onclick="deleteSelectedItems()" disabled>删除选中</button>
             </div>
             <table class="data-table">
@@ -512,6 +513,58 @@
                 <div class="form-actions">
                     <button class="btn" onclick="closeEditModal()">取消</button>
                     <button class="btn btn-primary" onclick="saveEdit()">保存修改</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Modal -->
+        <div id="add-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeAddModal()">&times;</span>
+                <h3>新增资料</h3>
+                <div class="form-group">
+                    <label>器名 *</label>
+                    <input type="text" id="add-name" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>编号</label>
+                    <input type="text" id="add-serial-num" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>时代</label>
+                    <input type="text" id="add-era" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>别称</label>
+                    <input type="text" id="add-alias" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>出土</label>
+                    <input type="text" id="add-discovery" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>现藏</label>
+                    <input type="text" id="add-collection" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>著录</label>
+                    <input type="text" id="add-publication" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>形制</label>
+                    <input type="text" id="add-format" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>图片出处</label>
+                    <input type="text" id="add-image" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label>释文</label>
+                    <textarea id="add-transcript" class="form-input" rows="4"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button class="btn" onclick="closeAddModal()">取消</button>
+                    <button class="btn btn-primary" onclick="saveNew()">保存</button>
                 </div>
             </div>
         </div>
@@ -998,6 +1051,67 @@
             document.getElementById('edit-modal').style.display = 'none';
         }
 
+        function openAddModal() {
+            // Clear all add form fields
+            document.getElementById('add-name').value = '';
+            document.getElementById('add-serial-num').value = '';
+            document.getElementById('add-era').value = '';
+            document.getElementById('add-alias').value = '';
+            document.getElementById('add-discovery').value = '';
+            document.getElementById('add-collection').value = '';
+            document.getElementById('add-publication').value = '';
+            document.getElementById('add-format').value = '';
+            document.getElementById('add-image').value = '';
+            document.getElementById('add-transcript').value = '';
+            document.getElementById('add-modal').style.display = 'block';
+        }
+
+        function closeAddModal() {
+            document.getElementById('add-modal').style.display = 'none';
+        }
+
+        async function saveNew() {
+            const name = document.getElementById('add-name').value;
+            if (!name) {
+                alert('器名为必填字段');
+                return;
+            }
+
+            const data = {
+                name: name,
+                serial_num: document.getElementById('add-serial-num').value,
+                era: document.getElementById('add-era').value,
+                alias: document.getElementById('add-alias').value,
+                discovery: document.getElementById('add-discovery').value,
+                collection: document.getElementById('add-collection').value,
+                publication: document.getElementById('add-publication').value,
+                format: document.getElementById('add-format').value,
+                image: document.getElementById('add-image').value,
+                transcript: document.getElementById('add-transcript').value
+            };
+
+            showLoading(true);
+            try {
+                const response = await fetch('/api/inscriptions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    closeAddModal();
+                    searchData();
+                } else {
+                    const err = await response.json();
+                    alert('保存失败: ' + (err.detail || '未知错误'));
+                }
+            } catch (e) {
+                alert('网络错误');
+            } finally {
+                showLoading(false);
+            }
+        }
+
         async function saveEdit() {
             const id = document.getElementById('edit-id').value;
             if (!id) return;
@@ -1039,9 +1153,13 @@
 
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('edit-modal');
-            if (event.target === modal) {
+            const editModal = document.getElementById('edit-modal');
+            const addModal = document.getElementById('add-modal');
+            if (event.target === editModal) {
                 closeEditModal();
+            }
+            if (event.target === addModal) {
+                closeAddModal();
             }
         }
     </script>
