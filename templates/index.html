@@ -1039,15 +1039,10 @@
                                 fetch('/api/frequencies/official-titles?top_n=15&type=north')
                             ])
                             const [southData, northData] = await Promise.all([southRes.json(), northRes.json()])
-                            // 确保 DOM 完全渲染后再绘制图表
-                            await nextTick()
-                            await nextTick()
-                            await nextTick()
-                            setTimeout(() => {
-                                renderFrequencyChart(southData.frequencies, '南面官', 'frequencyChartSouth')
-                                renderFrequencyChart(northData.frequencies, '北面官', 'frequencyChartNorth')
-                                frequenciesLoading.value = false  // 图表渲染完成后关闭 loading
-                            }, 500)
+                            // 渲染图表（renderFrequencyChart 内部会等待 DOM 出现）
+                            renderFrequencyChart(southData.frequencies, '南面官', 'frequencyChartSouth')
+                            renderFrequencyChart(northData.frequencies, '北面官', 'frequencyChartNorth')
+                            frequenciesLoading.value = false
                         } catch (error) {
                             console.error('Error loading official titles frequencies:', error)
                             frequenciesLoading.value = false
@@ -1076,31 +1071,46 @@
                         delete frequencyCharts[domId]
                     }
 
-                    // 等待 DOM 出现的轮询机制
-                    let retries = 20
-                    const tryRender = () => {
-                        const chartDom = document.getElementById(domId)
-                        if (!chartDom) {
-                            if (retries > 0) {
-                                retries--
-                                setTimeout(tryRender, 50)
-                                return
+                    // 使用 MutationObserver 等待 DOM 出现
+                    const container = document.querySelector('[v-if="frequenciesLoading"]')
+                    const targetDom = document.getElementById(domId)
+
+                    // 如果 DOM 已经存在，直接渲染
+                    if (targetDom) {
+                        renderChart(domId)
+                        return
+                    }
+
+                    // DOM 不存在，等待它出现
+                    let waited = 0
+                    const maxWait = 2000
+                    const interval = setInterval(() => {
+                        waited += 100
+                        const dom = document.getElementById(domId)
+                        if (dom || waited >= maxWait) {
+                            clearInterval(interval)
+                            if (dom) {
+                                renderChart(domId)
+                            } else {
+                                console.error(domId + ' DOM not found after ' + maxWait + 'ms')
                             }
-                            console.error(domId + ' DOM not found after retries')
-                            return
                         }
+                    }, 100)
+
+                    function renderChart(id) {
+                        const chartDom = document.getElementById(id)
+                        if (!chartDom) return
 
                         const yData = frequencies.map(f => f.word).reverse()
                         const xData = frequencies.map(f => f.count).reverse()
 
-                        // 类目越多时提升容器高度，避免固定柱宽导致挤压重叠
                         const minHeight = 400
                         const rowHeight = 28
                         chartDom.style.height = `${Math.max(minHeight, yData.length * rowHeight)}px`
 
-                        frequencyCharts[domId] = echarts.init(chartDom)
+                        frequencyCharts[id] = echarts.init(chartDom)
 
-                        frequencyCharts[domId].setOption({
+                        frequencyCharts[id].setOption({
                         title: {
                             text: title,
                             left: 'center',
@@ -1159,9 +1169,6 @@
                         }]
                     })
                     }
-
-                    // 开始等待并渲染
-                    tryRender()
                 }
 
                 const searchOfficialTitle = () => {
