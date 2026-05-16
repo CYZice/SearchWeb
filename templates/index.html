@@ -329,23 +329,45 @@
         }
 
         .view-toggle-btn {
-            padding: 0.5rem 0.75rem;
-            font-size: 1rem;
+            width: 2.75rem;
+            height: 2.5rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
             background: transparent;
             border: none;
+            color: var(--ink-gray);
             cursor: pointer;
             transition: all 0.2s;
-            opacity: 0.5;
+            opacity: 0.72;
         }
 
         .view-toggle-btn:hover {
-            opacity: 0.8;
+            background: rgba(116, 91, 59, 0.08);
+            color: var(--ink-black);
+            opacity: 1;
         }
 
         .view-toggle-btn.active {
             background: var(--藏青);
             color: white;
             opacity: 1;
+        }
+
+        .view-toggle-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        .view-toggle-icon .icon-fill {
+            fill: currentColor;
+            stroke: none;
         }
 
         /* 年号筛选输入框 */
@@ -546,20 +568,45 @@
                 <!-- 视图切换 -->
                 <div class="view-toggle flex items-center">
                     <button @click="activeTab = 'search'" class="view-toggle-btn"
-                        :class="{ active: activeTab === 'search' }" title="墓志检索">
-                        📜
+                        :class="{ active: activeTab === 'search' }" title="墓志检索" aria-label="墓志检索">
+                        <svg class="view-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M8 5.5h8" />
+                            <path d="M8 10h8" />
+                            <path d="M8 14.5h5" />
+                            <path d="M6.5 3h10A2.5 2.5 0 0 1 19 5.5V20l-3-1.6-3 1.6-3-1.6L7 20V5.5A2.5 2.5 0 0 0 4.5 3" />
+                            <path d="M4.5 3A2.5 2.5 0 0 0 2 5.5v1h5v-1A2.5 2.5 0 0 0 4.5 3Z" />
+                        </svg>
                     </button>
                     <button @click="switchToTimeline" class="view-toggle-btn"
-                        :class="{ active: activeTab === 'timeline' }" title="时代时间轴">
-                        📅
+                        :class="{ active: activeTab === 'timeline' }" title="时代时间轴" aria-label="时代时间轴">
+                        <svg class="view-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <rect x="4" y="5.5" width="16" height="14" rx="2" />
+                            <path d="M8 3.5v4" />
+                            <path d="M16 3.5v4" />
+                            <path d="M4 10h16" />
+                            <path d="M8 14h.01" />
+                            <path d="M12 14h.01" />
+                            <path d="M16 14h.01" />
+                        </svg>
                     </button>
                     <button @click="switchToWordCloud" class="view-toggle-btn"
-                        :class="{ active: activeTab === 'wordcloud' }" title="词云统计">
-                        ☁
+                        :class="{ active: activeTab === 'wordcloud' }" title="词云统计" aria-label="词云统计">
+                        <svg class="view-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M7.2 18h9.9a4.4 4.4 0 0 0 .2-8.8 6.1 6.1 0 0 0-11.4 1.9A3.5 3.5 0 0 0 7.2 18Z" />
+                            <path d="M8.2 13.1h.01" />
+                            <path d="M11.7 11.7h.01" />
+                            <path d="M15.4 13.8h.01" />
+                        </svg>
                     </button>
                     <button @click="switchToFrequencies" class="view-toggle-btn"
-                        :class="{ active: activeTab === 'frequencies' }" title="词频统计">
-                        📊
+                        :class="{ active: activeTab === 'frequencies' }" title="词频统计" aria-label="词频统计">
+                        <svg class="view-toggle-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M5 19V5" />
+                            <path d="M5 19h15" />
+                            <rect x="8" y="12" width="2.8" height="4.5" rx=".6" />
+                            <rect x="12.5" y="8" width="2.8" height="8.5" rx=".6" />
+                            <rect x="17" y="10.5" width="2.8" height="6" rx=".6" />
+                        </svg>
                     </button>
                 </div>
             </div>
