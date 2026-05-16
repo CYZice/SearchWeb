@@ -516,6 +516,10 @@ def search_official_title(
     """
     import re
 
+    word = word.strip()
+    if not word:
+        return {"word": word, "count": 0, "variants": [], "era": era}
+
     all_title_pairs = SOUTH_OFFICIAL_TITLE_PAIRS + NORTH_OFFICIAL_TITLE_PAIRS
 
     # 查找匹配的官称
@@ -525,10 +529,11 @@ def search_official_title(
             matched_pair = (display_name, variants)
             break
 
-    if not matched_pair:
-        return {"word": word, "count": 0, "variants": [], "era": era}
-
-    display_name, variants = matched_pair
+    if matched_pair:
+        display_name, variants = matched_pair
+    else:
+        # 未命中预设官称时，支持按输入词直接在碑文全文中计数。
+        display_name, variants = word, [word]
 
     # 获取碑文文本
     transcripts = get_all_transcripts(db, era=era)
